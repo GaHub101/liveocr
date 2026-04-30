@@ -1,74 +1,56 @@
 import { log } from './logger.js';
+import Tesseract from 'tesseract.js';
 
 const THROTTLE_MS = 500;
 const CONFIDENCE_THRESHOLD = 60;
 
-let ocrWorker = null;
+let tesseractWorker = null;
 let lastRunAt = 0;
 let busy = false;
-let pendingResultHandler = null;
-let initResolved = false;
 
-export function initOCR(onProgress) {
-  return new Promise((resolve, reject) => {
-    ocrWorker = new Worker(new URL('./ocr-worker.js', import.meta.url), { type: 'module' });
-
-    ocrWorker.onmessage = (e) => {
-      const { type } = e.data;
-
-      if (type === 'progress') {
-        onProgress?.(e.data.status, e.data.progress);
-        return;
+export async function initOCR(onProgress) {
+  tesseractWorker = await Tesseract.createWorker('eng', 1, {
+    logger: (m) => {
+      if (m.status === 'loading tesseract core' || m.status === 'loading language traineddata') {
+        onProgress?.(m.status, Math.round((m.progress || 0) * 100));
       }
-      if (type === 'ready') {
-        initResolved = true;
-        log.info('ocr', 'Tesseract worker bereit');
-        resolve(ocrWorker);
-        return;
-      }
-      if (type === 'error') {
-        busy = false;
-        pendingResultHandler = null;
-        log.error('ocr', e.data.message);
-        if (!initResolved) reject(new Error(e.data.message));
-        return;
-      }
-      if (type === 'result') {
-        busy = false;
-        if (pendingResultHandler) {
-          const { text, confidence } = e.data;
-          if (confidence >= CONFIDENCE_THRESHOLD && text.length > 0) {
-            log.info('ocr', `Erkannt (${Math.round(confidence)}%): ${text}`);
-            pendingResultHandler(text, confidence);
-          } else if (text.length > 0) {
-            log.warn('ocr', `Konfidenz zu niedrig (${Math.round(confidence)}%): ${text}`);
-          }
-          pendingResultHandler = null;
-        }
-      }
-    };
-
-    ocrWorker.postMessage({ type: 'init' });
+    },
   });
+
+  await tesseractWorker.setParameters({
+    tessedit_ocr_engine_mode: 1,
+    tessedit_pageseg_mode: 11,
+    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/',
+  });
+
+  log.info('ocr', 'Tesseract worker bereit');
 }
 
-export function scheduleRecognition(canvas, onResult) {
-  if (!ocrWorker || busy) return;
+export async function scheduleRecognition(canvas, onResult) {
+  if (!tesseractWorker || busy) return;
 
   const now = Date.now();
   if (now - lastRunAt < THROTTLE_MS) return;
   lastRunAt = now;
   busy = true;
 
-  pendingResultHandler = onResult;
-
-  canvas.toBlob((blob) => {
-    if (!blob) { busy = false; return; }
-    ocrWorker.postMessage({ type: 'recognize', blob });
-  }, 'image/png');
+  try {
+    const { data } = await tesseractWorker.recognize(canvas);
+    const text = data.text.trim();
+    if (data.confidence >= CONFIDENCE_THRESHOLD && text.length > 0) {
+      log.info('ocr', `Erkannt (${Math.round(data.confidence)}%): ${text}`);
+      onResult(text, data.confidence);
+    } else if (text.length > 0) {
+      log.warn('ocr', `Konfidenz zu niedrig (${Math.round(data.confidence)}%): ${text}`);
+    }
+  } catch (err) {
+    log.error('ocr', 'Erkennungsfehler', err);
+  } finally {
+    busy = false;
+  }
 }
 
-export function terminateOCR() {
-  ocrWorker?.postMessage({ type: 'terminate' });
-  ocrWorker = null;
+export async function terminateOCR() {
+  await tesseractWorker?.terminate();
+  tesseractWorker = null;
 }
