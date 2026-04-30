@@ -238,6 +238,27 @@
       background: #3b82f6;
       transition: width 0.3s;
     }
+
+    #product-banner {
+      display: none;
+      width: 100%;
+      max-width: 720px;
+      background: #1d4ed8;
+      padding: 10px 16px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #fff;
+      gap: 6px;
+      align-items: center;
+    }
+
+    #product-banner.visible { display: flex; }
+
+    #product-banner-label {
+      opacity: 0.75;
+      font-weight: 400;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
@@ -255,6 +276,11 @@
       <path d="M14 14h2v2h-2zM18 14h2M14 18v2M18 18h2v2h-2"/>
     </svg>
     <h1>Live OCR Scanner</h1>
+  </div>
+
+  <div id="product-banner">
+    <span id="product-banner-label">Produkt:</span>
+    <span id="product-banner-name"></span>
   </div>
 
   <div id="camera-container">

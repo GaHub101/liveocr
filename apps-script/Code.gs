@@ -1,5 +1,5 @@
 /**
- * Google Apps Script – doPost Webhook
+ * Google Apps Script – Live OCR Webhook
  *
  * Deploy als Web App:
  *   Extensions → Apps Script → Deploy → New deployment
@@ -8,27 +8,41 @@
  *   Who has access: Anyone
  *
  * Die Deployment-URL als GitHub Secret APPS_SCRIPT_URL speichern.
+ *
+ * Sheet-Struktur "Bestellungen":
+ *   A: ID          ← numerischer Identifier (neu, manuell angelegt)
+ *   B: Artikelname
+ *   C: Kategorie
+ *   D: Lieferant
+ *   E: REF-Nummer  ← wird per OCR befüllt
+ *   F: Artikelcode
+ *   G: Lagerort
+ *   H: Bestellstatus
  */
 
-const SHEET_NAME = 'OCR_Results';
+var BESTELLUNGEN_SHEET = 'Bestellungen';
+var LOG_SHEET          = 'OCR_Results';
+var REF_COL            = 5; // Spalte E (1-based)
+var ID_COL_INDEX       = 0; // Spalte A (0-based für Array-Zugriff)
+
+// ---------------------------------------------------------------------------
+// HTTP-Endpunkte
+// ---------------------------------------------------------------------------
 
 function doPost(e) {
   try {
-    var payload = parsePayload(e);
-    var sheet = getOrCreateSheet();
+    var payload = JSON.parse(e.postData.contents);
 
-    sheet.appendRow([
-      new Date().toISOString(),           // A: Timestamp (Serverzeit)
-      payload.ref        || '',           // B: Hersteller-Ref (OCR-Ergebnis)
-      payload.confidence != null ? payload.confidence : '', // C: Konfidenz %
-      payload.timestamp  || '',           // D: Client-Timestamp
-      payload.queuedAt   || '',           // E: Offline-Queue-Zeitpunkt (falls vorhanden)
-    ]);
+    if (payload.id) {
+      // Write-Modus: aus AppSheet geöffnet mit ?id= → REF in Bestellungen schreiben
+      return writeRef(payload);
+    }
 
-    return jsonResponse({ status: 'ok' });
+    // Standalone-Modus: kein id → OCR-Ergebnis in Log-Sheet schreiben
+    return appendLog(payload);
 
   } catch (err) {
-    return jsonResponse({ status: 'error', message: err.message }, 500);
+    return jsonResponse({ status: 'error', message: err.message });
   }
 }
 
@@ -36,30 +50,74 @@ function doGet() {
   return jsonResponse({ status: 'ok', message: 'Live OCR Webhook aktiv' });
 }
 
-function parsePayload(e) {
-  if (e && e.postData && e.postData.contents) {
-    return JSON.parse(e.postData.contents);
+// ---------------------------------------------------------------------------
+// Write-Modus
+// ---------------------------------------------------------------------------
+
+function writeRef(payload) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(BESTELLUNGEN_SHEET);
+  if (!sheet) {
+    return jsonResponse({ status: 'error', message: 'Sheet "' + BESTELLUNGEN_SHEET + '" nicht gefunden' });
   }
-  if (e && e.parameter) {
-    return e.parameter;
+
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][ID_COL_INDEX]) === String(payload.id)) {
+      sheet.getRange(i + 1, REF_COL).setValue(payload.ref);
+      return jsonResponse({ status: 'ok', row: i + 1, id: payload.id });
+    }
   }
-  throw new Error('Kein Payload empfangen');
+
+  return jsonResponse({ status: 'error', message: 'ID ' + payload.id + ' nicht gefunden' });
 }
 
-function getOrCreateSheet() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAME);
+// ---------------------------------------------------------------------------
+// Standalone-Modus (kein id) – Log-Eintrag
+// ---------------------------------------------------------------------------
+
+function appendLog(payload) {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(LOG_SHEET);
   if (!sheet) {
-    sheet = ss.insertSheet(SHEET_NAME);
-    sheet.appendRow(['Timestamp', 'Hersteller-Ref', 'Konfidenz', 'Client-Timestamp', 'QueuedAt']);
+    sheet = ss.insertSheet(LOG_SHEET);
+    sheet.appendRow(['Timestamp', 'REF', 'Konfidenz', 'Client-Timestamp', 'QueuedAt']);
     sheet.setFrozenRows(1);
   }
-  return sheet;
+
+  sheet.appendRow([
+    new Date().toISOString(),
+    payload.ref        || '',
+    payload.confidence != null ? payload.confidence : '',
+    payload.timestamp  || '',
+    payload.queuedAt   || '',
+  ]);
+
+  return jsonResponse({ status: 'ok' });
 }
 
-function jsonResponse(obj, code) {
-  var output = ContentService
+// ---------------------------------------------------------------------------
+// TODO: Search-Modus – REF in Spalte E suchen, passendes Produkt zurückgeben
+// Aktivierung: payload.mode === 'search' in doPost() prüfen + diese Funktion aufrufen
+//
+// function searchByRef(ref) {
+//   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(BESTELLUNGEN_SHEET);
+//   if (!sheet) return jsonResponse({ status: 'error', message: 'Sheet nicht gefunden' });
+//   var data = sheet.getDataRange().getValues();
+//   for (var i = 1; i < data.length; i++) {
+//     if (String(data[i][REF_COL - 1]) === String(ref)) { // REF_COL ist 1-based, Array 0-based
+//       return jsonResponse({ status: 'ok', id: data[i][0], name: data[i][1] });
+//     }
+//   }
+//   return jsonResponse({ status: 'not_found' });
+// }
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Hilfsfunktion
+// ---------------------------------------------------------------------------
+
+function jsonResponse(obj) {
+  return ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
-  return output;
 }

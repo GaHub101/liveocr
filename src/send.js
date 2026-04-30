@@ -8,6 +8,8 @@ export function getQueueLength() {
   return loadQueue().length;
 }
 
+// payload: { ref, confidence, timestamp, id? }
+// id is optional – only present in write mode (opened from AppSheet with ?id=)
 export async function sendOrQueue(payload, onQueueChange) {
   if (!WEBHOOK_URL) {
     throw new Error('VITE_APPS_SCRIPT_URL nicht konfiguriert. Siehe README.');

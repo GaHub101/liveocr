@@ -1,13 +1,15 @@
-const dot        = document.getElementById('status-dot');
-const statusText = document.getElementById('status-text');
-const resultText = document.getElementById('result-text');
-const confBar    = document.getElementById('confidence-bar');
-const confLabel  = document.getElementById('confidence-label');
-const sendBtn    = document.getElementById('send-btn');
-const queueInfo  = document.getElementById('queue-info');
-const loadScreen = document.getElementById('loading-screen');
-const loadMsg    = document.getElementById('loading-msg');
-const loadBar    = document.getElementById('loading-progress-bar');
+const dot           = document.getElementById('status-dot');
+const statusText    = document.getElementById('status-text');
+const resultText    = document.getElementById('result-text');
+const confBar       = document.getElementById('confidence-bar');
+const confLabel     = document.getElementById('confidence-label');
+const sendBtn       = document.getElementById('send-btn');
+const queueInfo     = document.getElementById('queue-info');
+const loadScreen    = document.getElementById('loading-screen');
+const loadMsg       = document.getElementById('loading-msg');
+const loadBar       = document.getElementById('loading-progress-bar');
+const productBanner = document.getElementById('product-banner');
+const productName   = document.getElementById('product-banner-name');
 
 export function setStatus(msg, state = 'working') {
   statusText.textContent = msg;
@@ -53,6 +55,15 @@ export function setSendState(state) {
       sendBtn.disabled = false;
     }, 2000);
   }
+}
+
+export function showProductBanner(name, id) {
+  productName.textContent = name ? `${name} (ID ${id})` : `ID ${id}`;
+  productBanner.classList.add('visible');
+}
+
+export function hideProductBanner() {
+  productBanner.classList.remove('visible');
 }
 
 export function updateQueueBadge(count) {
