@@ -2,7 +2,7 @@ import { log } from './logger.js';
 import Tesseract from 'tesseract.js';
 
 const THROTTLE_MS = 500;
-const CONFIDENCE_THRESHOLD = 35;
+const CONFIDENCE_THRESHOLD = 60;
 
 let tesseractWorker = null;
 let lastRunAt = 0;
@@ -22,8 +22,8 @@ export async function initOCR(onProgress) {
 
   await tesseractWorker.setParameters({
     tessedit_ocr_engine_mode: 1,
-    tessedit_pageseg_mode: 6,
-    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/',
+    tessedit_pageseg_mode: 7,
+    tessedit_char_whitelist: '',
   });
 
   log.info('ocr', 'Tesseract worker bereit');
