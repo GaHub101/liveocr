@@ -6,9 +6,19 @@ const WEBHOOK_URL = import.meta.env.VITE_APPS_SCRIPT_URL || '';
 let lastRunAt = 0;
 let busy = false;
 
-export function initOCR() {
+export async function initOCR() {
   log.info('ocr', 'Gemini-Modus aktiv');
-  return Promise.resolve();
+  if (!WEBHOOK_URL) return;
+  try {
+    const resp = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'ping' }),
+    });
+    const result = await resp.json();
+    log.info('ocr', `Verbindungstest OK: status=${result.status}`);
+  } catch (err) {
+    log.error('ocr', `Verbindungstest fehlgeschlagen [${err.name}]`, err.message);
+  }
 }
 
 export async function scheduleRecognition(canvas, onResult) {
@@ -40,7 +50,7 @@ export async function scheduleRecognition(canvas, onResult) {
       log.warn('ocr', `Kein REF gefunden (status: ${result.status})`);
     }
   } catch (err) {
-    log.error('ocr', 'Gemini-Aufruf fehlgeschlagen', err.message);
+    log.error('ocr', `Gemini-Aufruf fehlgeschlagen [${err.name}]`, err.message);
   } finally {
     busy = false;
   }
