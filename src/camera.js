@@ -9,23 +9,6 @@ export async function startCamera(videoEl) {
   });
   videoEl.srcObject = stream;
   await videoEl.play();
-
-  const track = stream.getVideoTracks()[0];
-  if (track) {
-    try {
-      await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
-    } catch (_) {
-      // not supported on all devices – silently ignored
-    }
-
-    // Tap anywhere on video triggers a single-shot refocus
-    videoEl.addEventListener('click', async () => {
-      try {
-        await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] });
-      } catch (_) { /* ignore */ }
-    });
-  }
-
   return stream;
 }
 
