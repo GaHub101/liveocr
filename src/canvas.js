@@ -101,68 +101,7 @@ export function preprocessFrame(video, canvas) {
     data[i] = data[i + 1] = data[i + 2] = v;
   }
 
-  // 4c. Adaptive Otsu binarization (128×128 tiles)
-  const cols = Math.ceil(outW / TILE_SIZE);
-  const rows = Math.ceil(outH / TILE_SIZE);
-
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const x0 = col * TILE_SIZE;
-      const y0 = row * TILE_SIZE;
-      const x1 = Math.min(x0 + TILE_SIZE, outW);
-      const y1 = Math.min(y0 + TILE_SIZE, outH);
-
-      const tileHist = new Uint32Array(256);
-      let tileN = 0;
-      for (let y = y0; y < y1; y++) {
-        for (let x = x0; x < x1; x++) {
-          tileHist[data[(y * outW + x) * 4]]++;
-          tileN++;
-        }
-      }
-
-      const { threshold, maxVar } = otsuThreshold(tileHist, tileN);
-      if (maxVar < 200) continue; // uniform tile (padding/blank) — skip
-
-      for (let y = y0; y < y1; y++) {
-        for (let x = x0; x < x1; x++) {
-          const idx = (y * outW + x) * 4;
-          const bin = data[idx] >= threshold ? 255 : 0;
-          data[idx] = data[idx + 1] = data[idx + 2] = bin;
-        }
-      }
-    }
-  }
-
+  // No binarization — feed grayscale to Tesseract LSTM (better than noisy binary)
   c.putImageData(imageData, 0, 0);
   return true;
-}
-
-function otsuThreshold(hist, total) {
-  if (total === 0) return { threshold: 128, maxVar: 0 };
-
-  let sumAll = 0;
-  for (let i = 0; i < 256; i++) sumAll += i * hist[i];
-
-  let sumB = 0;
-  let wB = 0;
-  let maxVar = 0;
-  let threshold = 128;
-
-  for (let t = 0; t < 256; t++) {
-    wB += hist[t];
-    if (wB === 0) continue;
-    const wF = total - wB;
-    if (wF === 0) break;
-
-    sumB += t * hist[t];
-    const mB = sumB / wB;
-    const mF = (sumAll - sumB) / wF;
-    const variance = wB * wF * (mB - mF) ** 2;
-    if (variance > maxVar) {
-      maxVar = variance;
-      threshold = t;
-    }
-  }
-  return { threshold, maxVar };
 }
