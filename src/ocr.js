@@ -2,11 +2,21 @@ import { log } from './logger.js';
 import Tesseract from 'tesseract.js';
 
 const THROTTLE_MS = 500;
-const CONFIDENCE_THRESHOLD = 80;
+const CONFIDENCE_THRESHOLD = 60;
+const STABILITY_REQUIRED = 3;
 
 let tesseractWorker = null;
 let lastRunAt = 0;
 let busy = false;
+
+let lastNormalized = '';
+let stableCount = 0;
+
+// Strips OCR border artifacts (e.g. "[#er]", "(nF)") by keeping only
+// alphanumeric runs of 3+ chars, sorted so order differences don't matter.
+function normalize(text) {
+  return (text.match(/[A-Z0-9]{3,}/gi) || []).sort().join(' ').toLowerCase();
+}
 
 export async function initOCR(onProgress) {
   tesseractWorker = await Tesseract.createWorker('eng', 1, {
@@ -41,24 +51,27 @@ export async function scheduleRecognition(canvas, onResult) {
     const { data } = await tesseractWorker.recognize(canvas);
     const rawText = data.text.trim();
 
-    // R\s*E\s*F handles OCR artifacts from the bordered "REF" label (e.g. "R E F", "[REF]")
-    const refMatch = rawText.match(/R\s*E\s*F[^A-Z0-9]*([A-Z0-9][\d\s\-\/A-Z]{2,})/i);
-    if (refMatch) {
-      const text = refMatch[1].trim().replace(/\s+/g, ' ');
-      if (data.confidence >= CONFIDENCE_THRESHOLD) {
-        log.info('ocr', `Erkannt via REF-Match (${Math.round(data.confidence)}%): ${text}`);
-        onResult(text, data.confidence);
-      } else {
-        log.warn('ocr', `REF gefunden, Konfidenz zu niedrig (${Math.round(data.confidence)}%): ${text}`);
-      }
-      return;
-    }
-
     if (data.confidence >= CONFIDENCE_THRESHOLD && rawText.length > 0) {
-      log.info('ocr', `Erkannt (${Math.round(data.confidence)}%): ${rawText}`);
-      onResult(rawText, data.confidence);
-    } else if (rawText.length > 0) {
-      log.warn('ocr', `Konfidenz zu niedrig (${Math.round(data.confidence)}%): ${rawText}`);
+      const normalized = normalize(rawText);
+      if (normalized && normalized === lastNormalized) {
+        stableCount++;
+      } else {
+        lastNormalized = normalized;
+        stableCount = 1;
+      }
+
+      if (stableCount >= STABILITY_REQUIRED) {
+        log.info('ocr', `Erkannt (${Math.round(data.confidence)}%, ${stableCount}× stabil): ${rawText}`);
+        onResult(rawText, data.confidence);
+      } else {
+        log.warn('ocr', `Warte auf Stabilität (${stableCount}/${STABILITY_REQUIRED}, ${Math.round(data.confidence)}%): ${rawText}`);
+      }
+    } else {
+      lastNormalized = '';
+      stableCount = 0;
+      if (rawText.length > 0) {
+        log.warn('ocr', `Konfidenz zu niedrig (${Math.round(data.confidence)}%): ${rawText}`);
+      }
     }
   } catch (err) {
     log.error('ocr', 'Erkennungsfehler', err);
