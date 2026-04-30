@@ -85,6 +85,13 @@ Das Overlay zeigt alle Log-Einträge live (aktualisiert alle 2 s), farbcodiert n
 https://USERNAME.github.io/liveocr?id=42&name=Damon%20Brackets&debug
 ```
 
+**Scan-Zone im Log prüfen:**
+Der erste `[INFO] canvas:`-Eintrag zeigt die tatsächlich verarbeitete Bildgröße:
+```
+[INFO] canvas: Scan-Zone: 1024×216px (Vollbild: 1280×720px)
+```
+Stimmt Scan-Zone mit Vollbild überein, ist der Crop nicht aktiv (Cache-Problem).
+
 ### Apps Script Logs (serverseitig)
 
 Fehler auf der Google-Seite sind in Apps Script sichtbar:
@@ -98,6 +105,7 @@ Fehler auf der Google-Seite sind in Apps Script sichtbar:
 | Quelle | Ereignisse |
 |---|---|
 | `main` | App-Start, Kamera OK/Fehler, OCR-Engine OK/Fehler, Senden OK/Fehler, Netzwerkwechsel |
+| `canvas` | Scan-Zone-Größe beim ersten Frame (einmalig) |
 | `ocr` | Worker bereit, erkannter Text + Konfidenz, verworfene Low-Confidence-Ergebnisse, Worker-Fehler |
 | `send` | POST gesendet, HTTP-Fehler, Apps Script Fehlerantworten, Queue enqueue/flush |
 | Apps Script | Jeder Request mit Payload, Schreibergebnis (Zeile + ID), alle Fehler |
@@ -109,7 +117,7 @@ Fehler auf der Google-Seite sind in Apps Script sichtbar:
 Falls Herstellerreferenzen andere Zeichen enthalten (`.`, `+`, Kleinbuchstaben):
 
 ```js
-// src/ocr-worker.js
+// src/ocr.js – in tesseractWorker.setParameters(...)
 tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-/.'
 ```
 
@@ -118,17 +126,18 @@ tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01
 ```
 Browser (Android Chrome)
   └── index.html
-      ├── src/camera.js       – getUserMedia, facingMode: environment
-      ├── src/canvas.js       – Preprocessing: Graustufen → Kontrast → Otsu-Binarisierung
-      ├── src/ocr-worker.js   – Tesseract.js im Web Worker (OEM 1, PSM 11)
-      ├── src/ocr.js          – 500ms-Throttle, Konfidenzfilter ≥ 60 %
-      ├── src/send.js         – fetch() + localStorage Offline-Queue
-      ├── src/logger.js       – Ring-Buffer-Log (localStorage, 300 Einträge, ?debug-Overlay)
-      ├── src/ui.js           – DOM-Updates
-      └── src/main.js         – Einstiegspunkt
+      ├── src/camera.js   – getUserMedia, facingMode: environment
+      ├── src/canvas.js   – Preprocessing: Graustufen → Kontrast → Otsu-Binarisierung
+      │                     Crop: nur Scan-Rahmen (80 % × 30 %, zentriert) wird verarbeitet
+      ├── src/ocr.js      – Tesseract.createWorker direkt (OEM 1, PSM 7), 500 ms-Throttle,
+      │                     Konfidenzfilter ≥ 60 %; CDN-Pfade für WASM/Worker-Script
+      ├── src/send.js     – fetch() + localStorage Offline-Queue
+      ├── src/logger.js   – Ring-Buffer-Log (localStorage, 300 Einträge, ?debug-Overlay)
+      ├── src/ui.js       – DOM-Updates
+      └── src/main.js     – Einstiegspunkt
 
 Apps Script (Google)
-  └── apps-script/Code.gs     – doPost → appendRow im Sheet OCR_Results
+  └── apps-script/Code.gs – doPost → writeRef (id vorhanden) oder appendLog (standalone)
 ```
 
 ## CORS-Hinweis

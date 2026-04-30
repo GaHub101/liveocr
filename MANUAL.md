@@ -14,9 +14,9 @@ Eine Web-App, die auf Android-Geräten läuft, per Kamera Text von Etiketten lie
 1. Du öffnest das Produkt in AppSheet (z.B. „Damon Brackets")
 2. Du tippst auf einen Button „REF scannen" → dein Browser öffnet `https://deinname.github.io/liveocr?id=42&name=Damon%20Brackets`
 3. Die App zeigt oben: **„Produkt: Damon Brackets"** und startet die Kamera
-4. Du hältst die Kamera auf das Etikett des Pakets
-5. Die App verarbeitet jeden Frame: Graustufen → Kontrastverstärkung → Binarisierung (Schwarz/Weiß) – damit Tesseract.js den Text besser erkennt
-6. Tesseract.js läuft im Hintergrund (Web Worker, blockiert die UI nicht) und erkennt laufend Text – gefiltert auf Zeichen die in Refs vorkommen (`A-Z`, `0-9`, `-`, `/`)
+4. Du hältst die Kamera auf das Etikett des Pakets – das Etikett in den **blauen Rahmen** positionieren
+5. Die App verarbeitet nur den Bereich im Rahmen: Graustufen → Kontrastverstärkung → Binarisierung (Schwarz/Weiß) – damit Tesseract.js den Text besser erkennt
+6. Tesseract.js läuft im Hintergrund und erkennt laufend Text – gefiltert auf Zeichen die in Refs vorkommen (`A-Z`, `0-9`, `-`, `/`)
 7. Du siehst den erkannten Text in Echtzeit, z.B. `OW-2241-A`, mit einem farbigen Konfidenz-Balken
 8. Du tippst **„An AppSheet senden"**
 9. Die App schickt `{ id: 42, ref: "OW-2241-A" }` per HTTP-POST an ein Google Apps Script
@@ -31,8 +31,8 @@ Eine Web-App, die auf Android-Geräten läuft, per Kamera Text von Etiketten lie
 |---|---|
 | **GitHub Pages** | Hostet die Web-App statisch – kein eigener Server nötig |
 | **`src/camera.js`** | Öffnet die Rückkamera des Geräts |
-| **`src/canvas.js`** | Verarbeitet jeden Kameraframe: Graustufen, Kontrast, adaptives Schwellwertverfahren (Otsu) pro 32×32-Kachel – bessere OCR-Genauigkeit auf Karton |
-| **`src/ocr-worker.js`** | Führt Tesseract.js in einem Web Worker aus, max. alle 500ms, nur Ergebnisse ≥60% Konfidenz |
+| **`src/canvas.js`** | Schneidet den Scan-Rahmen (80 % × 30 %, zentriert) aus dem Kamerabild aus und verarbeitet nur diesen Bereich: Graustufen, Kontrast, adaptives Schwellwertverfahren (Otsu) pro 32×32-Kachel |
+| **`src/ocr.js`** | Verwaltet den Tesseract-Worker (OEM 1, PSM 7), 500 ms-Throttle, Konfidenzfilter ≥ 60 %; lädt Tesseract-Ressourcen von CDN |
 | **`src/send.js`** | Sendet das Ergebnis per POST an Apps Script; wenn offline → speichert in `localStorage` und sendet automatisch wenn Netzwerk zurückkommt |
 | **`src/main.js`** | Liest URL-Parameter (`?id=`, `?name=`, `?mode=`), steuert den gesamten Ablauf |
 | **`apps-script/Code.gs`** | Empfängt den POST, sucht die Zeile per ID, schreibt die REF in Spalte E des Sheets |
@@ -114,10 +114,11 @@ Befülle Spalte A mit fortlaufenden Zahlen. Schreibe in Zelle **A2** die Formel 
 
 1. Öffne ein Produkt in AppSheet und tippe auf **„REF scannen"**
 2. Der Scanner öffnet sich mit dem blauen Banner oben: **„Produkt: [Artikelname]"** – so siehst du immer, für welches Produkt du gerade scannst
-3. Halte die Kamera auf das Etikett des Pakets. Achte auf:
+3. Positioniere das Etikett **im blauen Rahmen**. Achte auf:
    - **Gute Beleuchtung** – Lager-Neonlicht ist meistens ausreichend
    - **Ruhige Hand** – halte das Gerät kurz still
-   - **Abstand ca. 10–20 cm** vom Etikett
+   - **Abstand ca. 20–30 cm** vom Etikett
+   - Bei unscharfem Bild: **einmal auf das Kamerabild tippen** um den Fokus neu auszulösen
 4. Sobald der Scanner einen Text mit ausreichender Sicherheit erkennt, erscheint er in der Ergebnisbox
 5. Der **Konfidenz-Balken** zeigt wie sicher die Erkennung ist:
    - Grün (≥80%): zuverlässig
@@ -161,9 +162,10 @@ Der Scanner ist standardmäßig auf folgende Zeichen eingestellt:
 A–Z  0–9  -  /
 ```
 
-Falls deine Hersteller-Referenzen andere Zeichen enthalten (z.B. Punkte oder Kleinbuchstaben), passe die Whitelist in `src/ocr-worker.js` an:
+Falls deine Hersteller-Referenzen andere Zeichen enthalten (z.B. Punkte oder Kleinbuchstaben), passe die Whitelist in `src/ocr.js` an:
 
 ```js
+// in tesseractWorker.setParameters(...)
 tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-/.'
 ```
 
@@ -178,10 +180,16 @@ Nach der Änderung: `npm run build` ausführen und auf GitHub pushen.
 - Prüfe in den Chrome-Einstellungen ob die Kamera-Berechtigung für die Seite erteilt ist: Chrome-Menü → Einstellungen → Website-Einstellungen → Kamera
 
 **OCR erkennt nichts oder falschen Text**
+- Etikett genau in den **blauen Rahmen** halten – außerhalb des Rahmens wird nicht gescannt
+- Einmal auf das Kamerabild **tippen** um den Fokus auszulösen
 - Mehr Licht auf das Etikett – Schattenwurf durch die Hand vermeiden
-- Gerät ruhig halten, kurz warten
-- Abstand anpassen: zu nah (< 5 cm) und zu weit (> 30 cm) verschlechtert die Erkennung
-- Falls das Etikett sehr klein ist: Makro-Fokus in den Kamera-Einstellungen aktivieren
+- Gerät ruhig halten und ca. 20–30 cm Abstand einhalten
+- Falls das Bild trotzdem unscharf bleibt: alte Version aus dem PWA-Cache löschen (Chrome → Einstellungen → Website-Einstellungen → Speicher löschen) und Seite neu laden
+
+**PWA zeigt alte Version**
+- Die PWA cached Ressourcen lokal. Bei Problemen nach einem Update:
+  1. Chrome-Menü → Einstellungen → Website-Einstellungen → Gespeicherte Daten → Löschen
+  2. Oder im **Inkognito-Tab** öffnen – dieser umgeht den PWA-Cache vollständig
 
 **„Fehler" beim Senden**
 - Prüfe ob die Apps Script URL korrekt als GitHub Secret hinterlegt ist
