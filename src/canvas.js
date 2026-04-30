@@ -5,18 +5,28 @@ function getCtx(canvas) {
   return ctx;
 }
 
+// Matches the CSS scan-frame dimensions (80% × 30%, centred)
+const ZONE_W_RATIO = 0.8;
+const ZONE_H_RATIO = 0.3;
+
 export function preprocessFrame(video, canvas) {
   const w = video.videoWidth;
   const h = video.videoHeight;
   if (!w || !h) return false;
 
-  canvas.width  = w;
-  canvas.height = h;
+  // Crop to scan zone only – reduces noise and speeds up OCR
+  const zoneW = Math.round(w * ZONE_W_RATIO);
+  const zoneH = Math.round(h * ZONE_H_RATIO);
+  const zoneX = Math.round((w - zoneW) / 2);
+  const zoneY = Math.round((h - zoneH) / 2);
+
+  canvas.width  = zoneW;
+  canvas.height = zoneH;
 
   const c = getCtx(canvas);
-  c.drawImage(video, 0, 0, w, h);
+  c.drawImage(video, zoneX, zoneY, zoneW, zoneH, 0, 0, zoneW, zoneH);
 
-  const imageData = c.getImageData(0, 0, w, h);
+  const imageData = c.getImageData(0, 0, zoneW, zoneH);
   const data = imageData.data;
 
   // 1. Graustufen (in-place, Luminanz-Formel)
@@ -26,7 +36,7 @@ export function preprocessFrame(video, canvas) {
   }
 
   // 2. Kontraststretch: [P5, P95] → [0, 255]
-  const total = w * h;
+  const total = zoneW * zoneH;
   const hist = new Uint32Array(256);
   for (let i = 0; i < data.length; i += 4) hist[data[i]]++;
 
@@ -50,33 +60,30 @@ export function preprocessFrame(video, canvas) {
 
   // 3. Adaptives Otsu-Binarisieren (Kacheln 32×32)
   const tileSize = 32;
-  const cols = Math.ceil(w / tileSize);
-  const rows = Math.ceil(h / tileSize);
+  const cols = Math.ceil(zoneW / tileSize);
+  const rows = Math.ceil(zoneH / tileSize);
 
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const x0 = col * tileSize;
       const y0 = row * tileSize;
-      const x1 = Math.min(x0 + tileSize, w);
-      const y1 = Math.min(y0 + tileSize, h);
+      const x1 = Math.min(x0 + tileSize, zoneW);
+      const y1 = Math.min(y0 + tileSize, zoneH);
 
-      // Histogramm der Kachel
       const tileHist = new Uint32Array(256);
       let tileN = 0;
       for (let y = y0; y < y1; y++) {
         for (let x = x0; x < x1; x++) {
-          tileHist[data[(y * w + x) * 4]]++;
+          tileHist[data[(y * zoneW + x) * 4]]++;
           tileN++;
         }
       }
 
-      // Otsu-Schwellwert für diese Kachel
       const threshold = otsuThreshold(tileHist, tileN);
 
-      // Binarisieren
       for (let y = y0; y < y1; y++) {
         for (let x = x0; x < x1; x++) {
-          const idx = (y * w + x) * 4;
+          const idx = (y * zoneW + x) * 4;
           const bin = data[idx] >= threshold ? 255 : 0;
           data[idx] = data[idx + 1] = data[idx + 2] = bin;
         }
