@@ -9,6 +9,18 @@ export async function startCamera(videoEl) {
   });
   videoEl.srcObject = stream;
   await videoEl.play();
+
+  // Tap-to-focus: single-shot applyConstraints on user tap
+  const track = stream.getVideoTracks()[0];
+  if (track) {
+    videoEl.addEventListener('click', () => {
+      const caps = track.getCapabilities?.();
+      if (caps?.focusMode?.includes('single-shot')) {
+        track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] }).catch(() => {});
+      }
+    });
+  }
+
   return stream;
 }
 
