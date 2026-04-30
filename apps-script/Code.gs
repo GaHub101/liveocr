@@ -159,14 +159,15 @@ function handleGeminiOcr(base64Image) {
   });
 
   var result = JSON.parse(resp.getContentText());
-  var ref = '';
+  var raw = '';
   if (result.candidates && result.candidates[0] && result.candidates[0].content &&
       result.candidates[0].content.parts && result.candidates[0].content.parts[0]) {
-    ref = (result.candidates[0].content.parts[0].text || '').trim();
+    raw = (result.candidates[0].content.parts[0].text || '').trim();
   }
 
-  Logger.log('handleGeminiOcr: ref=' + (ref || '(leer)'));
-  return jsonResponse({ status: ref ? 'ok' : 'not_found', ref: ref });
+  var ref = raw;
+  Logger.log('handleGeminiOcr: raw="' + raw + '" ref=' + (ref || '(leer)'));
+  return jsonResponse({ status: ref ? 'ok' : 'not_found', ref: ref, raw: raw.substring(0, 200) });
 }
 
 // ---------------------------------------------------------------------------
