@@ -39,6 +39,71 @@ Kamera-Zugriff funktioniert auf `localhost` ohne HTTPS.
 2. Kamerazugriff erlauben
 3. Chrome-Menü → **"Zum Startbildschirm hinzufügen"** → wie eine native App
 
+### 5. AppSheet-Action einrichten
+
+Damit der Scanner aus AppSheet heraus einem bestimmten Produkt zugewiesen werden kann:
+
+1. Google Sheet: neue Spalte **A** einfügen, Header `ID`, Werte `1…N` per `=ROW()-1` in A2 und runterziehen
+2. In AppSheet eine **Action** anlegen:
+   - Typ: **Open a URL**
+   - Formel:
+     ```
+     CONCATENATE("https://USERNAME.github.io/liveocr?id=", [ID], "&name=", ENCODEURL([Artikelname]))
+     ```
+3. Action auf dem gewünschten View hinzufügen
+
+Der Scanner zeigt dann ein blaues Banner „Produkt: [Artikelname]" und schreibt die erkannte REF-Nummer direkt in die Spalte **E (REF-Nummer)** der entsprechenden Zeile.
+
+---
+
+## Debug / Fehlerdiagnose
+
+### Browser-Log (Android ohne DevTools)
+
+Alle Ereignisse werden persistent in `localStorage` gespeichert (max. 300 Einträge, älteste werden verdrängt).
+
+**Debug-Overlay öffnen:**
+```
+https://USERNAME.github.io/liveocr?debug
+```
+
+Das Overlay zeigt alle Log-Einträge live (aktualisiert alle 2 s), farbcodiert nach Schwere:
+
+| Farbe | Level | Bedeutung |
+|---|---|---|
+| Grau | INFO | Normaler Ablauf (Kamera start, OCR-Ergebnis, Senden OK) |
+| Gelb | WARN | Hinweise (niedrige Konfidenz, offline, Queue-Einträge) |
+| Rot | ERROR | Fehler (Kamerafehler, OCR-Fehler, HTTP-Fehler, Apps Script Fehler) |
+
+**Buttons im Overlay:**
+- **Export JSON** – lädt eine `.json`-Datei mit dem vollständigen Log herunter (per WhatsApp/Mail weiterschicken)
+- **Leeren** – löscht den Log-Speicher
+- **✕** – schließt das Overlay (Log bleibt erhalten)
+
+**Debug-Overlay kombinierbar mit AppSheet-Modus:**
+```
+https://USERNAME.github.io/liveocr?id=42&name=Damon%20Brackets&debug
+```
+
+### Apps Script Logs (serverseitig)
+
+Fehler auf der Google-Seite sind in Apps Script sichtbar:
+
+1. Google Sheet öffnen → **Extensions → Apps Script**
+2. Linke Leiste → **Execution log** (Uhr-Symbol)
+3. Jeder `doPost`-Aufruf schreibt Payload, Ergebnis und Fehler ins Log
+
+### Was wird geloggt
+
+| Quelle | Ereignisse |
+|---|---|
+| `main` | App-Start, Kamera OK/Fehler, OCR-Engine OK/Fehler, Senden OK/Fehler, Netzwerkwechsel |
+| `ocr` | Worker bereit, erkannter Text + Konfidenz, verworfene Low-Confidence-Ergebnisse, Worker-Fehler |
+| `send` | POST gesendet, HTTP-Fehler, Apps Script Fehlerantworten, Queue enqueue/flush |
+| Apps Script | Jeder Request mit Payload, Schreibergebnis (Zeile + ID), alle Fehler |
+
+---
+
 ## Whitelist anpassen
 
 Falls Herstellerreferenzen andere Zeichen enthalten (`.`, `+`, Kleinbuchstaben):
@@ -58,6 +123,7 @@ Browser (Android Chrome)
       ├── src/ocr-worker.js   – Tesseract.js im Web Worker (OEM 1, PSM 11)
       ├── src/ocr.js          – 500ms-Throttle, Konfidenzfilter ≥ 60 %
       ├── src/send.js         – fetch() + localStorage Offline-Queue
+      ├── src/logger.js       – Ring-Buffer-Log (localStorage, 300 Einträge, ?debug-Overlay)
       ├── src/ui.js           – DOM-Updates
       └── src/main.js         – Einstiegspunkt
 
