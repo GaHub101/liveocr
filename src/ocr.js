@@ -2,7 +2,7 @@ import { log } from './logger.js';
 import Tesseract from 'tesseract.js';
 
 const THROTTLE_MS = 500;
-const CONFIDENCE_THRESHOLD = 60;
+const CONFIDENCE_THRESHOLD = 80;
 
 let tesseractWorker = null;
 let lastRunAt = 0;
@@ -22,7 +22,7 @@ export async function initOCR(onProgress) {
 
   await tesseractWorker.setParameters({
     tessedit_ocr_engine_mode: 1,
-    tessedit_pageseg_mode: 6,
+    tessedit_pageseg_mode: 7,
     tessedit_char_whitelist: '',
   });
 
@@ -45,8 +45,12 @@ export async function scheduleRecognition(canvas, onResult) {
     const refMatch = rawText.match(/R\s*E\s*F[^A-Z0-9]*([A-Z0-9][\d\s\-\/A-Z]{2,})/i);
     if (refMatch) {
       const text = refMatch[1].trim().replace(/\s+/g, ' ');
-      log.info('ocr', `Erkannt via REF-Match (${Math.round(data.confidence)}%): ${text}`);
-      onResult(text, data.confidence);
+      if (data.confidence >= CONFIDENCE_THRESHOLD) {
+        log.info('ocr', `Erkannt via REF-Match (${Math.round(data.confidence)}%): ${text}`);
+        onResult(text, data.confidence);
+      } else {
+        log.warn('ocr', `REF gefunden, Konfidenz zu niedrig (${Math.round(data.confidence)}%): ${text}`);
+      }
       return;
     }
 
