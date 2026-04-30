@@ -10,6 +10,9 @@ let busy = false;
 
 export async function initOCR(onProgress) {
   tesseractWorker = await Tesseract.createWorker('eng', 1, {
+    workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
+    corePath:   'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1',
+    langPath:   'https://tessdata.projectnaptha.com/4.0.0',
     logger: (m) => {
       if (m.status === 'loading tesseract core' || m.status === 'loading language traineddata') {
         onProgress?.(m.status, Math.round((m.progress || 0) * 100));
