@@ -14,8 +14,8 @@ async function init(onProgress) {
   await worker.setParameters({
     // OEM 1: LSTM only – schneller und genauer für gedruckten Text
     // PSM 11: sparse text – gut für Etiketten mit gemischtem Inhalt
-    tessedit_ocr_engine_mode: '1',
-    tessedit_pageseg_mode: '11',
+    tessedit_ocr_engine_mode: 1,
+    tessedit_pageseg_mode: 11,
     // Whitelist: Zeichen, die in Herstellerreferenzen vorkommen
     // Anpassen falls Punkt oder Plus gebraucht wird: 'ABCDE...9-/.'
     tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/',

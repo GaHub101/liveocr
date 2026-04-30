@@ -55,6 +55,10 @@ function doGet() {
 // ---------------------------------------------------------------------------
 
 function writeRef(payload) {
+  if (!payload.ref || String(payload.ref).trim() === '') {
+    return jsonResponse({ status: 'error', message: 'ref fehlt oder leer – nichts geschrieben' });
+  }
+
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(BESTELLUNGEN_SHEET);
   if (!sheet) {
     return jsonResponse({ status: 'error', message: 'Sheet "' + BESTELLUNGEN_SHEET + '" nicht gefunden' });
@@ -63,7 +67,7 @@ function writeRef(payload) {
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][ID_COL_INDEX]) === String(payload.id)) {
-      sheet.getRange(i + 1, REF_COL).setValue(payload.ref);
+      sheet.getRange(i + 1, REF_COL).setValue(String(payload.ref).trim());
       return jsonResponse({ status: 'ok', row: i + 1, id: payload.id });
     }
   }

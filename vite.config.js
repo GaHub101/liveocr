@@ -29,7 +29,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            urlPattern: /tesseract\.js/,
+            // Matches Tesseract WASM, traineddata and worker scripts
+            urlPattern: /(tesseract|eng\.traineddata|\.wasm)/,
             handler: 'CacheFirst',
             options: { cacheName: 'tesseract-cache', expiration: { maxAgeSeconds: 60 * 60 * 24 * 30 } },
           },

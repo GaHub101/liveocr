@@ -5,6 +5,7 @@ let ocrWorker = null;
 let lastRunAt = 0;
 let busy = false;
 let pendingResultHandler = null;
+let initResolved = false;
 
 export function initOCR(onProgress) {
   return new Promise((resolve, reject) => {
@@ -18,11 +19,15 @@ export function initOCR(onProgress) {
         return;
       }
       if (type === 'ready') {
+        initResolved = true;
         resolve(ocrWorker);
         return;
       }
       if (type === 'error') {
-        reject(new Error(e.data.message));
+        // Reset recognition state so the next scheduleRecognition call can proceed
+        busy = false;
+        pendingResultHandler = null;
+        if (!initResolved) reject(new Error(e.data.message));
         return;
       }
       if (type === 'result') {

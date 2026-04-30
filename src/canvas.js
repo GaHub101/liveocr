@@ -38,7 +38,10 @@ export function preprocessFrame(video, canvas) {
     if (cumul / total < 0.05) lo = v;
     if (cumul / total < 0.95) hi = v;
   }
-  const range = (hi - lo) || 1;
+  // Uniform image (e.g. blank wall): skip contrast stretch and binarization
+  if (lo >= hi) return true;
+
+  const range = hi - lo;
 
   for (let i = 0; i < data.length; i += 4) {
     const v = Math.max(0, Math.min(255, Math.round(((data[i] - lo) / range) * 255)));
