@@ -51,20 +51,7 @@ async function main() {
     return;
   }
 
-  // OCR-Engine laden
-  setLoadingMessage('OCR-Engine wird geladen…', 30);
-  try {
-    await initOCR((status, progress) => {
-      setLoadingMessage(`${status} (${progress}%)`, 30 + Math.round(progress * 0.6));
-    });
-    log.info('main', 'OCR-Engine geladen');
-  } catch (err) {
-    log.error('main', 'OCR-Initialisierung fehlgeschlagen', err);
-    setLoadingMessage(`OCR-Fehler: ${err.message}`);
-    setStatus('OCR-Fehler', 'error');
-    return;
-  }
-
+  await initOCR();
   hideLoading();
   setStatus('Bereit', 'ready');
   updateQueueBadge(getQueueLength());

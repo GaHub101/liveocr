@@ -30,14 +30,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        runtimeCaching: [
-          {
-            // Matches Tesseract WASM, traineddata and worker scripts
-            urlPattern: /(tesseract|eng\.traineddata|\.wasm)/,
-            handler: 'CacheFirst',
-            options: { cacheName: 'tesseract-cache', expiration: { maxAgeSeconds: 60 * 60 * 24 * 30 } },
-          },
-        ],
+        runtimeCaching: [],
       },
     }),
   ],

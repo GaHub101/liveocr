@@ -37,7 +37,11 @@ function doPost(e) {
     }
 
     var payload = JSON.parse(e.postData.contents);
-    Logger.log('doPost: payload=' + JSON.stringify(payload));
+    Logger.log('doPost: payload action=' + (payload.action || 'none') + ' id=' + (payload.id || ''));
+
+    if (payload.action === 'ocr') {
+      return handleGeminiOcr(payload.image);
+    }
 
     if (payload.id) {
       return writeRef(payload);
@@ -126,6 +130,44 @@ function appendLog(payload) {
 //   return jsonResponse({ status: 'not_found' });
 // }
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Gemini OCR
+// ---------------------------------------------------------------------------
+
+function handleGeminiOcr(base64Image) {
+  var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) {
+    Logger.log('handleGeminiOcr: GEMINI_API_KEY fehlt in Script Properties');
+    return jsonResponse({ status: 'error', message: 'GEMINI_API_KEY nicht konfiguriert' });
+  }
+
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey;
+  var body = {
+    contents: [{ parts: [
+      { text: 'This is a product label. Find the REF number (reference/article number). Return ONLY the code after "REF", nothing else. If none found, return empty string.' },
+      { inline_data: { mime_type: 'image/jpeg', data: base64Image } }
+    ]}],
+    generationConfig: { maxOutputTokens: 50, temperature: 0 }
+  };
+
+  var resp = UrlFetchApp.fetch(url, {
+    method: 'POST',
+    contentType: 'application/json',
+    payload: JSON.stringify(body),
+    muteHttpExceptions: true
+  });
+
+  var result = JSON.parse(resp.getContentText());
+  var ref = '';
+  if (result.candidates && result.candidates[0] && result.candidates[0].content &&
+      result.candidates[0].content.parts && result.candidates[0].content.parts[0]) {
+    ref = (result.candidates[0].content.parts[0].text || '').trim();
+  }
+
+  Logger.log('handleGeminiOcr: ref=' + (ref || '(leer)'));
+  return jsonResponse({ status: ref ? 'ok' : 'not_found', ref: ref });
+}
 
 // ---------------------------------------------------------------------------
 // Hilfsfunktion
