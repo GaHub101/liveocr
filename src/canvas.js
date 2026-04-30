@@ -86,8 +86,8 @@ export function preprocessFrame(video, canvas) {
     data[i] = data[i + 1] = data[i + 2] = v;
   }
 
-  // 3. Adaptives Otsu-Binarisieren (Kacheln 32×32)
-  const tileSize = 32;
+  // 3. Adaptives Otsu-Binarisieren (Kacheln 64×64)
+  const tileSize = 64;
   const cols = Math.ceil(zoneW / tileSize);
   const rows = Math.ceil(zoneH / tileSize);
 
