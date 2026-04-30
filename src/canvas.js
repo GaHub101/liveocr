@@ -13,21 +13,41 @@ const ZONE_W_RATIO = 0.8;
 const ZONE_H_RATIO = 0.3;
 
 export function preprocessFrame(video, canvas) {
-  const w = video.videoWidth;
-  const h = video.videoHeight;
-  if (!w || !h) return false;
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (!vw || !vh) return false;
 
-  // Crop to scan zone only – reduces noise and speeds up OCR
-  const zoneW = Math.round(w * ZONE_W_RATIO);
-  const zoneH = Math.round(h * ZONE_H_RATIO);
-  const zoneX = Math.round((w - zoneW) / 2);
-  const zoneY = Math.round((h - zoneH) / 2);
+  // The #video element uses object-fit: cover with aspect-ratio: 4/3.
+  // Only the visible (displayed) portion of the raw video matters for the crop.
+  const displayAspect = 4 / 3;
+  const videoAspect = vw / vh;
+
+  let srcX, srcY, srcW, srcH;
+  if (videoAspect < displayAspect) {
+    // Portrait video in landscape box → top/bottom cropped
+    srcW = vw;
+    srcH = vw / displayAspect;
+    srcX = 0;
+    srcY = (vh - srcH) / 2;
+  } else {
+    // Landscape video in portrait box → left/right cropped
+    srcH = vh;
+    srcW = vh * displayAspect;
+    srcX = (vw - srcW) / 2;
+    srcY = 0;
+  }
+
+  // Crop to scan zone (80% × 30%, centred within the displayed region)
+  const zoneW = Math.round(srcW * ZONE_W_RATIO);
+  const zoneH = Math.round(srcH * ZONE_H_RATIO);
+  const zoneX = Math.round(srcX + (srcW - zoneW) / 2);
+  const zoneY = Math.round(srcY + (srcH - zoneH) / 2);
 
   canvas.width  = zoneW;
   canvas.height = zoneH;
 
   if (!zoneSizeLogged) {
-    log.info('canvas', `Scan-Zone: ${zoneW}×${zoneH}px (Vollbild: ${w}×${h}px)`);
+    log.info('canvas', `Scan-Zone: ${zoneW}×${zoneH}px (angezeigt: ${Math.round(srcW)}×${Math.round(srcH)}px, Vollbild: ${vw}×${vh}px)`);
     zoneSizeLogged = true;
   }
 
