@@ -24,7 +24,7 @@ export async function scheduleRecognition(canvas, onResult) {
       return;
     }
 
-    const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+    const base64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
 
     const resp = await fetch(WEBHOOK_URL, {
       method: 'POST',

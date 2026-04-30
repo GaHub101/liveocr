@@ -4,7 +4,7 @@ let zoneSizeLogged = false;
 
 const ZONE_W_RATIO = 0.8;
 const ZONE_H_RATIO = 0.3;
-const OCR_SCALE    = 2;    // upscale crop for Gemini (2x keeps payload ~150 KB)
+const OCR_SCALE    = 1;    // no upscale needed for Gemini (keeps JPEG payload ~20 KB)
 const OCR_PAD      = 20;   // white padding around scaled image (px)
 const TILE_SIZE    = 128;  // adaptive Otsu tile size on scaled image
 
