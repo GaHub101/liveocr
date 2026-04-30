@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#3b82f6" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <title>Live OCR Scanner</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0f172a;
+      color: #f1f5f9;
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100dvh;
+      padding: 0;
+      overflow-x: hidden;
+    }
+
+    #header {
+      width: 100%;
+      padding: 12px 16px;
+      background: #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+
+    #header h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #3b82f6;
+    }
+
+    #camera-container {
+      position: relative;
+      width: 100%;
+      max-width: 720px;
+      background: #000;
+    }
+
+    #video {
+      width: 100%;
+      display: block;
+      aspect-ratio: 4/3;
+      object-fit: cover;
+    }
+
+    /* Overlay: scanning frame */
+    #scan-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    #scan-frame {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80%;
+      height: 30%;
+      border: 2px solid rgba(59,130,246,0.8);
+      border-radius: 6px;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,0.35);
+    }
+
+    #scan-line {
+      position: absolute;
+      left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+      animation: scan 2s linear infinite;
+      top: 0;
+    }
+
+    @keyframes scan {
+      0%   { top: 0%; }
+      100% { top: 100%; }
+    }
+
+    #canvas { display: none; }
+
+    #result-panel {
+      width: 100%;
+      max-width: 720px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    #status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+
+    #status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #64748b;
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+
+    #status-dot.ready    { background: #22c55e; }
+    #status-dot.working  { background: #f59e0b; animation: pulse 1s infinite; }
+    #status-dot.error    { background: #ef4444; }
+    #status-dot.offline  { background: #f97316; }
+
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+
+    #result-box {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 14px 16px;
+      min-height: 80px;
+    }
+
+    #result-label {
+      font-size: 0.7rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+
+    #result-text {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      word-break: break-all;
+      letter-spacing: 0.05em;
+      min-height: 2rem;
+    }
+
+    #confidence-bar-wrap {
+      margin-top: 8px;
+      height: 4px;
+      background: #0f172a;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    #confidence-bar {
+      height: 100%;
+      width: 0%;
+      background: #3b82f6;
+      border-radius: 2px;
+      transition: width 0.3s, background 0.3s;
+    }
+
+    #confidence-label {
+      font-size: 0.7rem;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    #send-btn {
+      width: 100%;
+      padding: 16px;
+      background: #3b82f6;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #send-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    #send-btn:not(:disabled):active { background: #2563eb; }
+
+    #queue-info {
+      font-size: 0.75rem;
+      color: #f97316;
+      text-align: center;
+      display: none;
+    }
+
+    #queue-info.visible { display: block; }
+
+    #loading-screen {
+      position: fixed;
+      inset: 0;
+      background: #0f172a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 100;
+    }
+
+    #loading-screen.hidden { display: none; }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #334155;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #loading-msg { font-size: 0.9rem; color: #94a3b8; }
+    #loading-progress {
+      width: 200px;
+      height: 4px;
+      background: #1e293b;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    #loading-progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #3b82f6;
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="loading-screen">
+    <div class="spinner"></div>
+    <div id="loading-msg">Starte…</div>
+    <div id="loading-progress"><div id="loading-progress-bar"></div></div>
+  </div>
+
+  <div id="header">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/>
+      <rect x="2" y="14" width="8" height="8" rx="1"/>
+      <path d="M14 14h2v2h-2zM18 14h2M14 18v2M18 18h2v2h-2"/>
+    </svg>
+    <h1>Live OCR Scanner</h1>
+  </div>
+
+  <div id="camera-container">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    <div id="scan-overlay">
+      <div id="scan-frame">
+        <div id="scan-line"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="result-panel">
+    <div id="status-bar">
+      <div id="status-dot"></div>
+      <span id="status-text">Initialisiere…</span>
+    </div>
+
+    <div id="result-box">
+      <div id="result-label">Erkannter Text</div>
+      <div id="result-text">–</div>
+      <div id="confidence-bar-wrap">
+        <div id="confidence-bar"></div>
+      </div>
+      <div id="confidence-label"></div>
+    </div>
+
+    <button id="send-btn" disabled>An AppSheet senden</button>
+    <div id="queue-info"></div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
