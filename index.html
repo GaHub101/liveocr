@@ -88,6 +88,13 @@
     }
 
     #canvas { display: none; }
+    body.debug-mode #canvas {
+      display: block;
+      width: 100%;
+      max-width: 720px;
+      border: 2px solid #f59e0b;
+      image-rendering: pixelated;
+    }
 
     #result-panel {
       width: 100%;
@@ -337,13 +344,14 @@
 
   <div id="camera-container">
     <video id="video" autoplay playsinline muted></video>
-    <canvas id="canvas"></canvas>
     <div id="scan-overlay">
       <div id="scan-frame">
         <div id="scan-line"></div>
       </div>
     </div>
   </div>
+
+  <canvas id="canvas"></canvas>
 
   <div id="result-panel">
     <div id="status-bar">

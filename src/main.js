@@ -136,6 +136,7 @@ main().catch((err) => {
 
 // Debug-Overlay – aktiv wenn ?debug in der URL
 if (new URLSearchParams(location.search).has('debug')) {
+  document.body.classList.add('debug-mode');
   const overlay  = document.getElementById('debug-overlay');
   const logEl    = document.getElementById('debug-log');
   const countEl  = document.getElementById('debug-count');
