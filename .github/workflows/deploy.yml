@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/live-ocr-planner-W2hDV]
   workflow_dispatch:
 
 permissions:
