@@ -31,17 +31,22 @@ var ID_COL_INDEX       = 0; // Spalte A (0-based für Array-Zugriff)
 
 function doPost(e) {
   try {
+    if (!e || !e.postData || !e.postData.contents) {
+      Logger.log('doPost: leerer Request-Body');
+      return jsonResponse({ status: 'error', message: 'Leerer Request-Body' });
+    }
+
     var payload = JSON.parse(e.postData.contents);
+    Logger.log('doPost: payload=' + JSON.stringify(payload));
 
     if (payload.id) {
-      // Write-Modus: aus AppSheet geöffnet mit ?id= → REF in Bestellungen schreiben
       return writeRef(payload);
     }
 
-    // Standalone-Modus: kein id → OCR-Ergebnis in Log-Sheet schreiben
     return appendLog(payload);
 
   } catch (err) {
+    Logger.log('doPost ERROR: ' + err.message + '\nStack: ' + err.stack);
     return jsonResponse({ status: 'error', message: err.message });
   }
 }
@@ -56,22 +61,27 @@ function doGet() {
 
 function writeRef(payload) {
   if (!payload.ref || String(payload.ref).trim() === '') {
+    Logger.log('writeRef: ref fehlt oder leer für id=' + payload.id);
     return jsonResponse({ status: 'error', message: 'ref fehlt oder leer – nichts geschrieben' });
   }
 
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(BESTELLUNGEN_SHEET);
   if (!sheet) {
+    Logger.log('writeRef: Sheet "' + BESTELLUNGEN_SHEET + '" nicht gefunden');
     return jsonResponse({ status: 'error', message: 'Sheet "' + BESTELLUNGEN_SHEET + '" nicht gefunden' });
   }
 
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][ID_COL_INDEX]) === String(payload.id)) {
-      sheet.getRange(i + 1, REF_COL).setValue(String(payload.ref).trim());
+      var ref = String(payload.ref).trim();
+      sheet.getRange(i + 1, REF_COL).setValue(ref);
+      Logger.log('writeRef: OK – id=' + payload.id + ' row=' + (i + 1) + ' ref=' + ref);
       return jsonResponse({ status: 'ok', row: i + 1, id: payload.id });
     }
   }
 
+  Logger.log('writeRef: ID nicht gefunden – id=' + payload.id);
   return jsonResponse({ status: 'error', message: 'ID ' + payload.id + ' nicht gefunden' });
 }
 
@@ -96,6 +106,7 @@ function appendLog(payload) {
     payload.queuedAt   || '',
   ]);
 
+  Logger.log('appendLog: ref=' + (payload.ref || '(leer)') + ' confidence=' + payload.confidence);
   return jsonResponse({ status: 'ok' });
 }
 

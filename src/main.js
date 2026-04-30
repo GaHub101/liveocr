@@ -2,6 +2,7 @@ import { startCamera }                             from './camera.js';
 import { preprocessFrame }                          from './canvas.js';
 import { initOCR, scheduleRecognition }             from './ocr.js';
 import { sendOrQueue, flushQueue, getQueueLength }  from './send.js';
+import { log, getLogs, clearLogs, exportLogs }      from './logger.js';
 import {
   setStatus, setLoadingMessage, hideLoading,
   showResult, setSendState, updateQueueBadge,
@@ -36,11 +37,15 @@ async function main() {
     showProductBanner(productName, productId);
   }
 
+  log.info('main', `App gestartet – mode=${mode ?? 'standalone'}, id=${productId ?? '–'}`);
+
   // Kamera starten
   setLoadingMessage('Kamera wird gestartet…', 10);
   try {
     await startCamera(video);
+    log.info('main', 'Kamera gestartet');
   } catch (err) {
+    log.error('main', 'Kamerazugriff fehlgeschlagen', err);
     setLoadingMessage(`Kamerazugriff verweigert: ${err.message}`);
     setStatus('Kamerafehler', 'error');
     return;
@@ -52,7 +57,9 @@ async function main() {
     await initOCR((status, progress) => {
       setLoadingMessage(`${status} (${progress}%)`, 30 + Math.round(progress * 0.6));
     });
+    log.info('main', 'OCR-Engine geladen');
   } catch (err) {
+    log.error('main', 'OCR-Initialisierung fehlgeschlagen', err);
     setLoadingMessage(`OCR-Fehler: ${err.message}`);
     setStatus('OCR-Fehler', 'error');
     return;
@@ -95,6 +102,7 @@ async function main() {
       setSendState(navigator.onLine ? 'sent' : 'queued');
       setStatus(navigator.onLine ? 'Gesendet' : 'Offline – in Warteschlange', navigator.onLine ? 'ready' : 'offline');
     } catch (err) {
+      log.error('main', 'Senden fehlgeschlagen', err);
       setSendState('error');
       setStatus(`Fehler: ${err.message}`, 'error');
     }
@@ -102,23 +110,55 @@ async function main() {
 
   // Offline → Online: Queue leeren
   window.addEventListener('online', async () => {
+    log.info('main', 'Netzwerk wiederhergestellt – leere Queue');
     setStatus('Verbindung wiederhergestellt', 'working');
     try {
       await flushQueue(updateQueueBadge);
       setStatus('Bereit', 'ready');
-    } catch {
+    } catch (err) {
+      log.error('main', 'Queue-Flush nach Reconnect fehlgeschlagen', err);
       setStatus('Bereit', 'ready');
     }
   });
 
   window.addEventListener('offline', () => {
+    log.warn('main', 'Netzwerk getrennt');
     setStatus('Offline', 'offline');
     updateQueueBadge(getQueueLength());
   });
 }
 
 main().catch((err) => {
+  log.error('main', `Kritischer Fehler: ${err.message}`, err);
   setLoadingMessage(`Kritischer Fehler: ${err.message}`);
   setStatus('Fehler', 'error');
-  console.error(err);
 });
+
+// Debug-Overlay – aktiv wenn ?debug in der URL
+if (new URLSearchParams(location.search).has('debug')) {
+  const overlay  = document.getElementById('debug-overlay');
+  const logEl    = document.getElementById('debug-log');
+  const countEl  = document.getElementById('debug-count');
+
+  function renderLog() {
+    const entries = getLogs();
+    countEl.textContent = entries.length;
+    logEl.innerHTML = entries.slice().reverse().map(e => `
+      <div class="log-entry ${e.level}">
+        <span class="log-ts">${e.ts.slice(11, 19)}</span>
+        <span class="log-level">${e.level}</span>
+        <span class="log-src">${e.source}</span>
+        <span class="log-msg">${e.msg}${e.detail ? ` — ${e.detail}` : ''}</span>
+      </div>`).join('');
+  }
+
+  overlay.classList.add('visible');
+  renderLog();
+
+  // Re-render every 2s so new entries appear automatically
+  setInterval(renderLog, 2000);
+
+  document.getElementById('debug-export').addEventListener('click', exportLogs);
+  document.getElementById('debug-clear').addEventListener('click', () => { clearLogs(); renderLog(); });
+  document.getElementById('debug-close').addEventListener('click', () => overlay.classList.remove('visible'));
+}

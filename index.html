@@ -259,6 +259,58 @@
       font-weight: 400;
       flex-shrink: 0;
     }
+
+    /* Debug overlay – only visible with ?debug in URL */
+    #debug-overlay {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 45dvh;
+      background: rgba(2, 6, 23, 0.97);
+      border-top: 2px solid #334155;
+      flex-direction: column;
+      z-index: 200;
+      font-family: monospace;
+    }
+    #debug-overlay.visible { display: flex; }
+
+    #debug-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      flex-shrink: 0;
+    }
+    #debug-toolbar span { font-size: 0.75rem; color: #94a3b8; flex: 1; }
+    #debug-toolbar button {
+      font-size: 0.7rem;
+      padding: 4px 8px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #cbd5e1;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    #debug-log {
+      overflow-y: auto;
+      flex: 1;
+      padding: 6px 8px;
+      font-size: 0.68rem;
+      line-height: 1.5;
+    }
+
+    .log-entry { display: flex; gap: 6px; border-bottom: 1px solid #1e293b; padding: 2px 0; }
+    .log-ts  { color: #475569; flex-shrink: 0; }
+    .log-src { color: #7dd3fc; flex-shrink: 0; min-width: 60px; }
+    .log-msg { color: #e2e8f0; word-break: break-all; }
+    .log-entry.INFO  .log-level { color: #64748b; }
+    .log-entry.WARN  .log-level { color: #f59e0b; }
+    .log-entry.ERROR .log-level { color: #f87171; }
+    .log-entry.ERROR .log-msg   { color: #fca5a5; }
+    .log-level { flex-shrink: 0; min-width: 36px; }
   </style>
 </head>
 <body>
@@ -310,6 +362,16 @@
 
     <button id="send-btn" disabled>An AppSheet senden</button>
     <div id="queue-info"></div>
+  </div>
+
+  <div id="debug-overlay">
+    <div id="debug-toolbar">
+      <span>Debug-Log (<span id="debug-count">0</span> Einträge)</span>
+      <button id="debug-export">Export JSON</button>
+      <button id="debug-clear">Leeren</button>
+      <button id="debug-close">✕</button>
+    </div>
+    <div id="debug-log"></div>
   </div>
 
   <script type="module" src="./src/main.js"></script>

@@ -1,3 +1,5 @@
+import { log } from './logger.js';
+
 const THROTTLE_MS = 500;
 const CONFIDENCE_THRESHOLD = 60;
 
@@ -20,13 +22,14 @@ export function initOCR(onProgress) {
       }
       if (type === 'ready') {
         initResolved = true;
+        log.info('ocr', 'Tesseract worker bereit');
         resolve(ocrWorker);
         return;
       }
       if (type === 'error') {
-        // Reset recognition state so the next scheduleRecognition call can proceed
         busy = false;
         pendingResultHandler = null;
+        log.error('ocr', e.data.message);
         if (!initResolved) reject(new Error(e.data.message));
         return;
       }
@@ -35,7 +38,10 @@ export function initOCR(onProgress) {
         if (pendingResultHandler) {
           const { text, confidence } = e.data;
           if (confidence >= CONFIDENCE_THRESHOLD && text.length > 0) {
+            log.info('ocr', `Erkannt (${Math.round(confidence)}%): ${text}`);
             pendingResultHandler(text, confidence);
+          } else if (text.length > 0) {
+            log.warn('ocr', `Konfidenz zu niedrig (${Math.round(confidence)}%): ${text}`);
           }
           pendingResultHandler = null;
         }
