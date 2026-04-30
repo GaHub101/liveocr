@@ -22,7 +22,7 @@ export async function initOCR(onProgress) {
 
   await tesseractWorker.setParameters({
     tessedit_ocr_engine_mode: 1,
-    tessedit_pageseg_mode: 7,
+    tessedit_pageseg_mode: 6,
     tessedit_char_whitelist: '',
   });
 
@@ -39,12 +39,22 @@ export async function scheduleRecognition(canvas, onResult) {
 
   try {
     const { data } = await tesseractWorker.recognize(canvas);
-    const text = data.text.trim();
-    if (data.confidence >= CONFIDENCE_THRESHOLD && text.length > 0) {
-      log.info('ocr', `Erkannt (${Math.round(data.confidence)}%): ${text}`);
+    const rawText = data.text.trim();
+
+    // R\s*E\s*F handles OCR artifacts from the bordered "REF" label (e.g. "R E F", "[REF]")
+    const refMatch = rawText.match(/R\s*E\s*F[^A-Z0-9]*([A-Z0-9][\d\s\-\/A-Z]{2,})/i);
+    if (refMatch) {
+      const text = refMatch[1].trim().replace(/\s+/g, ' ');
+      log.info('ocr', `Erkannt via REF-Match (${Math.round(data.confidence)}%): ${text}`);
       onResult(text, data.confidence);
-    } else if (text.length > 0) {
-      log.warn('ocr', `Konfidenz zu niedrig (${Math.round(data.confidence)}%): ${text}`);
+      return;
+    }
+
+    if (data.confidence >= CONFIDENCE_THRESHOLD && rawText.length > 0) {
+      log.info('ocr', `Erkannt (${Math.round(data.confidence)}%): ${rawText}`);
+      onResult(rawText, data.confidence);
+    } else if (rawText.length > 0) {
+      log.warn('ocr', `Konfidenz zu niedrig (${Math.round(data.confidence)}%): ${rawText}`);
     }
   } catch (err) {
     log.error('ocr', 'Erkennungsfehler', err);
