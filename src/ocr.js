@@ -22,7 +22,7 @@ export async function initOCR(onProgress) {
 
   await tesseractWorker.setParameters({
     tessedit_ocr_engine_mode: 1,
-    tessedit_pageseg_mode: 11,
+    tessedit_pageseg_mode: 7,
     tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/',
   });
 
@@ -40,23 +40,9 @@ export async function scheduleRecognition(canvas, onResult) {
   try {
     const { data } = await tesseractWorker.recognize(canvas);
     const text = data.text.trim();
-
     if (data.confidence >= CONFIDENCE_THRESHOLD && text.length > 0) {
       log.info('ocr', `Erkannt (${Math.round(data.confidence)}%): ${text}`);
       onResult(text, data.confidence);
-      return;
-    }
-
-    // Fall back to high-confidence individual words (handles blurry images where
-    // surrounding noise drags down overall confidence but the target word is clear)
-    const goodWords = (data.words ?? []).filter(
-      w => w.confidence >= CONFIDENCE_THRESHOLD && w.text.trim().length >= 2,
-    );
-    if (goodWords.length > 0) {
-      const bestText = goodWords.map(w => w.text.trim()).join(' ');
-      const bestConf = Math.max(...goodWords.map(w => w.confidence));
-      log.info('ocr', `Erkannt via Wortfilter (${Math.round(bestConf)}%): ${bestText}`);
-      onResult(bestText, bestConf);
     } else if (text.length > 0) {
       log.warn('ocr', `Konfidenz zu niedrig (${Math.round(data.confidence)}%): ${text}`);
     }

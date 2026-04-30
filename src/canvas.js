@@ -1,4 +1,7 @@
+import { log } from './logger.js';
+
 let ctx = null;
+let zoneSizeLogged = false;
 
 function getCtx(canvas) {
   if (!ctx) ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -22,6 +25,11 @@ export function preprocessFrame(video, canvas) {
 
   canvas.width  = zoneW;
   canvas.height = zoneH;
+
+  if (!zoneSizeLogged) {
+    log.info('canvas', `Scan-Zone: ${zoneW}×${zoneH}px (Vollbild: ${w}×${h}px)`);
+    zoneSizeLogged = true;
+  }
 
   const c = getCtx(canvas);
   c.drawImage(video, zoneX, zoneY, zoneW, zoneH, 0, 0, zoneW, zoneH);
