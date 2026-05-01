@@ -106,20 +106,11 @@ Fehler auf der Google-Seite sind in Apps Script sichtbar:
 |---|---|
 | `main` | App-Start, Kamera OK/Fehler, OCR-Engine OK/Fehler, Senden OK/Fehler, Netzwerkwechsel |
 | `canvas` | Scan-Zone-Größe beim ersten Frame (einmalig) |
-| `ocr` | Worker bereit, erkannter Text + Konfidenz, verworfene Low-Confidence-Ergebnisse, Worker-Fehler |
+| `ocr` | Gemini-Modus aktiv, Verbindungstest, erkannter Text, kein REF gefunden, API-Fehler |
 | `send` | POST gesendet, HTTP-Fehler, Apps Script Fehlerantworten, Queue enqueue/flush |
 | Apps Script | Jeder Request mit Payload, Schreibergebnis (Zeile + ID), alle Fehler |
 
 ---
-
-## Whitelist anpassen
-
-Falls Herstellerreferenzen andere Zeichen enthalten (`.`, `+`, Kleinbuchstaben):
-
-```js
-// src/ocr.js – in tesseractWorker.setParameters(...)
-tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-/.'
-```
 
 ## Architektur
 
@@ -129,15 +120,16 @@ Browser (Android Chrome)
       ├── src/camera.js   – getUserMedia, facingMode: environment
       ├── src/canvas.js   – Preprocessing: Graustufen → Kontrast → Otsu-Binarisierung
       │                     Crop: nur Scan-Rahmen (80 % × 30 %, zentriert) wird verarbeitet
-      ├── src/ocr.js      – Tesseract.createWorker direkt (OEM 1, PSM 7), 500 ms-Throttle,
-      │                     Konfidenzfilter ≥ 60 %; CDN-Pfade für WASM/Worker-Script
+      ├── src/ocr.js      – Gemini 2.5 Flash via Apps Script Webhook; Frame als base64-JPEG
+      │                     gesendet, kein lokales OCR
       ├── src/send.js     – fetch() + localStorage Offline-Queue
       ├── src/logger.js   – Ring-Buffer-Log (localStorage, 300 Einträge, ?debug-Overlay)
       ├── src/ui.js       – DOM-Updates
       └── src/main.js     – Einstiegspunkt
 
 Apps Script (Google)
-  └── apps-script/Code.gs – doPost → writeRef (id vorhanden) oder appendLog (standalone)
+  └── apps-script/Code.gs – doPost → handleGeminiOcr (OCR) / writeRef (id vorhanden) /
+                             appendLog (standalone)
 ```
 
 ## CORS-Hinweis

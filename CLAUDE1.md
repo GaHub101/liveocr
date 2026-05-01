@@ -1,6 +1,6 @@
 # Live OCR Scanner
 
-Browser-PWA für Android: liest Herstellerreferenzen per Kamera (Tesseract.js) und schreibt sie via Google Apps Script in ein Google Sheet (AppSheet-Datenquelle).
+Browser-PWA für Android: liest Herstellerreferenzen per Kamera (Gemini 2.5 Flash) und schreibt sie via Google Apps Script in ein Google Sheet (AppSheet-Datenquelle).
 
 ## Befehle
 
@@ -18,7 +18,7 @@ Deployment läuft über GitHub Actions (`.github/workflows/deploy.yml`) auf Push
 |---|---|
 | `src/camera.js` | `getUserMedia`, Rückkamera (`facingMode: environment`) |
 | `src/canvas.js` | Frame-Crop auf Scan-Zone (80 %×30 %, zentriert) + Preprocessing: Graustufen → Kontraststretch (P5/P95) → adaptives Otsu-Binarisieren (32×32-Kacheln) |
-| `src/ocr.js` | `Tesseract.createWorker()` direkt im Main Thread (Tesseract managed sein eigenes Threading). 500 ms-Throttle, Konfidenzfilter ≥ 60 % |
+| `src/ocr.js` | Gemini 2.5 Flash via Apps Script Webhook. Frame → JPEG (q0.9) → base64 → POST mit Prompt |
 | `src/send.js` | `fetch()` ohne `Content-Type`-Header (→ Simple Request, kein CORS-Preflight). Offline-Queue in `localStorage` (`ocr_send_queue`), auto-flush bei `online`-Event |
 | `src/logger.js` | Ring-Buffer-Log, max. 300 Einträge, `localStorage`. Debug-Overlay via `?debug` URL-Param |
 | `src/ui.js` | DOM-Updates (Status, Ergebnis, Banner, Queue-Badge) |
@@ -27,18 +27,11 @@ Deployment läuft über GitHub Actions (`.github/workflows/deploy.yml`) auf Push
 
 ## Aktuelle OCR-Konfiguration
 
-```
-OEM 1   – LSTM-only (schneller als OEM 3)
-PSM 7   – Single uniform text line (besser für kurze REF-Codes als PSM 11)
-Whitelist: ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/
-Schwellwert: ≥ 60 % Konfidenz
-Scan-Zone: 80 % Breite × 30 % Höhe, zentriert (entspricht blauem Rahmen-Overlay)
-```
-
-Tesseract-Ressourcen werden von CDN geladen (Vite-Bundle-Kompatibilität):
-- `https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js`
-- `https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1`
-- `https://tessdata.projectnaptha.com/4.0.0`
+Gemini 2.5 Flash via Apps Script Webhook (`handleGeminiOcr`):
+- Frame → JPEG (Qualität 0.9) → base64 → POST `{ action: 'ocr', image, prompt }`
+- `GEMINI_API_KEY` muss in den Apps Script Script Properties gesetzt sein
+- Scan-Zone: 80 % Breite × 30 % Höhe, zentriert (entspricht blauem Rahmen-Overlay)
+- Keine Zeichen-Whitelist nötig – Gemini erkennt alle Zeichen
 
 ## Google Sheet-Struktur („Bestellungen")
 
@@ -52,11 +45,10 @@ Spalte A (`ID`) mit `=ROW()-1` ab A2 befüllen. IDs dürfen sich nicht ändern.
 
 Siehe `ISSUE.md` für vollständige Liste mit Root Cause und Fix-Commits.
 
-**Offen:** OCR-Konfidenz bei unscharfem Kamerabild noch zu niedrig. Kamera fokussiert auf Galaxy S24 nativ – kein `applyConstraints`-Aufruf nötig.
+**Offen:** Kamera fokussiert auf Galaxy S24 nativ – kein `applyConstraints`-Aufruf nötig.
 
 ## Wichtige Konventionen
 
 - Kein `Content-Type: application/json` beim POST → Simple Request, kein CORS-Preflight
-- `ocr-worker.js` existiert nicht mehr (gelöscht) – Tesseract direkt im Main Thread
 - PWA-Cache: bei Problemen Inkognito-Tab nutzen oder Chrome → Website-Einstellungen → Speicher löschen
 - Log-Eintrag `[INFO] canvas: Scan-Zone: Xpx×Ypx` bestätigt dass der Crop aktiv ist
