@@ -3,7 +3,7 @@ import { log } from './logger.js';
 let zoneSizeLogged = false;
 
 const ZONE_W_RATIO = 0.8;
-const ZONE_H_RATIO = 0.3;
+const ZONE_H_RATIO = 0.4;
 const OCR_PAD      = 20;
 
 export function preprocessFrame(video, canvas) {
