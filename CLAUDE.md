@@ -15,7 +15,11 @@ There is no test suite.
 
 ## Environment setup
 
-Copy `.env.example` to `.env.local` and set `VITE_APPS_SCRIPT_URL` to your deployed Apps Script URL. Without this the app will show an error when trying to send. For GitHub Pages the URL is stored as repository secret `APPS_SCRIPT_URL`.
+Copy `.env.example` to `.env.local` and set both env vars:
+- `VITE_APPS_SCRIPT_URL` – deployed Apps Script URL
+- `VITE_WEBHOOK_SECRET` – shared secret token (must match `WEBHOOK_SECRET` in Apps Script Script Properties)
+
+For GitHub Pages both are stored as repository secrets (`APPS_SCRIPT_URL`, `WEBHOOK_SECRET`).
 
 ## Architecture
 
@@ -38,7 +42,7 @@ Camera (getUserMedia, rear-facing)
 |---|---|
 | `src/camera.js` | `getUserMedia`, rear camera (`facingMode: environment`) |
 | `src/canvas.js` | Crop to scan zone (80%×30%, centred) + preprocessing: greyscale → P5/P95 contrast stretch → adaptive Otsu binarisation (32×32 tiles) |
-| `src/ocr.js` | Gemini 2.5 Flash via Apps Script webhook. Canvas frame → JPEG (q0.9) → base64 → POST with prompt |
+| `src/ocr.js` | Gemini 2.5 Flash via Apps Script webhook. Canvas frame → downscaled 50 % → JPEG (q0.7) → base64 → POST. Prompt is hardcoded server-side. |
 | `src/send.js` | `fetch()` without `Content-Type` header (simple request, no CORS preflight). Offline queue in `localStorage` (`ocr_send_queue`), auto-flush on `online` event |
 | `src/logger.js` | Ring-buffer log, max. 300 entries, `localStorage`. Debug overlay via `?debug` URL param |
 | `src/ui.js` | DOM updates (status, result, banner, queue badge) |
@@ -48,10 +52,11 @@ Camera (getUserMedia, rear-facing)
 ### OCR configuration
 
 Gemini 2.5 Flash (via Apps Script webhook `handleGeminiOcr`):
-- Canvas frame → JPEG (quality 0.9) → base64 → POST `{ action: 'ocr', image, prompt }`
-- Prompt instructs Gemini to find the REF number or return `NONE`
+- Canvas frame → downscaled 50 % on offscreen canvas → JPEG (quality 0.7) → base64 → POST `{ action: 'ocr', image, secret }`
+- Prompt is hardcoded in `Code.gs` (`handleGeminiOcr`), not sent from the client
 - `GEMINI_API_KEY` must be set in Apps Script Script Properties
-- Scan zone: 80 % width × 30 % height, centred (matches the blue frame overlay)
+- `WEBHOOK_SECRET` must be set in Apps Script Script Properties (same value as `VITE_WEBHOOK_SECRET`)
+- Scan zone: 80 % width × 60 % height, centred (matches the blue frame overlay)
 - No character whitelist needed – Gemini reads any characters
 
 ### URL modes
@@ -75,12 +80,13 @@ Populate column A with `=ROW()-1` from A2 downwards. IDs must not change. Deploy
 
 ### CI/CD
 
-`.github/workflows/deploy.yml` builds and deploys to GitHub Pages on every push to `main`. The secret `APPS_SCRIPT_URL` is injected as `VITE_APPS_SCRIPT_URL` at build time.
+`.github/workflows/deploy.yml` builds and deploys to GitHub Pages on every push to `main`. Two secrets are injected at build time: `APPS_SCRIPT_URL` → `VITE_APPS_SCRIPT_URL` and `WEBHOOK_SECRET` → `VITE_WEBHOOK_SECRET`.
 
 ### Key design constraints
 
 - **No `Content-Type: application/json` header on POST.** Keeps the request a "simple request", avoiding a CORS preflight that Apps Script cannot answer. Apps Script reads the body via `JSON.parse(e.postData.contents)`.
 - **No `applyConstraints` calls.** Explicit focus mode constraints interfere with Samsung's native AF stack. The Galaxy S24 focuses natively without intervention.
+- **Shared secret on every request.** `VITE_WEBHOOK_SECRET` is embedded in the built JS and sent as `secret` in every POST body. Apps Script verifies it against `WEBHOOK_SECRET` in Script Properties. Deters automated abuse; not cryptographically strong (secret is visible in built JS).
 
 ### Debugging
 

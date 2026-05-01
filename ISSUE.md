@@ -67,5 +67,7 @@ langPath:   'https://tessdata.projectnaptha.com/4.0.0'
 | Entscheidung | Begründung |
 |---|---|
 | Kein `Content-Type: application/json` Header | Vermeidet CORS-Preflight – Apps Script akzeptiert den Body via `e.postData.contents` |
-| Scan-Zone 80 % × 30 % | Breites Querformat deckt typische Label-Breite ab; 30 % Höhe reicht für 1–3 Textzeilen und reduziert Hintergrundlärm |
+| Scan-Zone 80 % × 60 % | Breites Querformat deckt typische Label-Breite ab; 60 % Höhe erfasst auch mehrzeilige Labels |
 | Gemini statt lokalem OCR | Gemini 2.5 Flash erkennt REF-Codes auch bei schlechter Bildqualität zuverlässiger als lokales Tesseract (kein Konfidenzproblem bei Unschärfe) |
+| Bild-Downscale 50 % + JPEG q0.7 | Payload-Reduktion von ~750 KB auf ~150 KB (−75 %); 404×236 px reichen Gemini für REF-Codes; Latenzgewinn ~500–1000 ms |
+| Shared Secret im Request | `WEBHOOK_SECRET` in Script Properties schützt den Webhook vor unbefugtem Zugriff ohne echtes Auth-System; Secret ist im kompilierten JS sichtbar (kein kryptografischer Schutz) |

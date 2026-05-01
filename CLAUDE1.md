@@ -10,7 +10,7 @@ npm run build    # Vite-Build → dist/
 npm run preview  # dist/ lokal vorschauen
 ```
 
-Deployment läuft über GitHub Actions (`.github/workflows/deploy.yml`) auf Push zu `main` oder `claude/live-ocr-planner-W2hDV`. GitHub Secret `APPS_SCRIPT_URL` muss gesetzt sein.
+Deployment läuft über GitHub Actions (`.github/workflows/deploy.yml`) auf Push zu `main`. GitHub Secrets `APPS_SCRIPT_URL` und `WEBHOOK_SECRET` müssen gesetzt sein.
 
 ## Architektur
 
@@ -18,7 +18,7 @@ Deployment läuft über GitHub Actions (`.github/workflows/deploy.yml`) auf Push
 |---|---|
 | `src/camera.js` | `getUserMedia`, Rückkamera (`facingMode: environment`) |
 | `src/canvas.js` | Frame-Crop auf Scan-Zone (80 %×30 %, zentriert) + Preprocessing: Graustufen → Kontraststretch (P5/P95) → adaptives Otsu-Binarisieren (32×32-Kacheln) |
-| `src/ocr.js` | Gemini 2.5 Flash via Apps Script Webhook. Frame → JPEG (q0.9) → base64 → POST mit Prompt |
+| `src/ocr.js` | Gemini 2.5 Flash via Apps Script Webhook. Frame → 50 % Downscale → JPEG (q0.7) → base64 → POST. Prompt ist serverseitig hardkodiert. |
 | `src/send.js` | `fetch()` ohne `Content-Type`-Header (→ Simple Request, kein CORS-Preflight). Offline-Queue in `localStorage` (`ocr_send_queue`), auto-flush bei `online`-Event |
 | `src/logger.js` | Ring-Buffer-Log, max. 300 Einträge, `localStorage`. Debug-Overlay via `?debug` URL-Param |
 | `src/ui.js` | DOM-Updates (Status, Ergebnis, Banner, Queue-Badge) |
@@ -28,9 +28,10 @@ Deployment läuft über GitHub Actions (`.github/workflows/deploy.yml`) auf Push
 ## Aktuelle OCR-Konfiguration
 
 Gemini 2.5 Flash via Apps Script Webhook (`handleGeminiOcr`):
-- Frame → JPEG (Qualität 0.9) → base64 → POST `{ action: 'ocr', image, prompt }`
-- `GEMINI_API_KEY` muss in den Apps Script Script Properties gesetzt sein
-- Scan-Zone: 80 % Breite × 30 % Höhe, zentriert (entspricht blauem Rahmen-Overlay)
+- Frame → 50 % Downscale (Offscreen-Canvas) → JPEG (Qualität 0.7) → base64 → POST `{ action: 'ocr', image, secret }`
+- Prompt ist in `Code.gs` hardkodiert, wird nicht vom Client gesendet
+- `GEMINI_API_KEY` und `WEBHOOK_SECRET` müssen in den Apps Script Script Properties gesetzt sein
+- Scan-Zone: 80 % Breite × 60 % Höhe, zentriert (entspricht blauem Rahmen-Overlay)
 - Keine Zeichen-Whitelist nötig – Gemini erkennt alle Zeichen
 
 ## Google Sheet-Struktur („Bestellungen")
@@ -50,5 +51,6 @@ Siehe `ISSUE.md` für vollständige Liste mit Root Cause und Fix-Commits.
 ## Wichtige Konventionen
 
 - Kein `Content-Type: application/json` beim POST → Simple Request, kein CORS-Preflight
+- Jeder POST enthält `secret: VITE_WEBHOOK_SECRET` – Apps Script prüft gegen Script Property `WEBHOOK_SECRET`
 - PWA-Cache: bei Problemen Inkognito-Tab nutzen oder Chrome → Website-Einstellungen → Speicher löschen
 - Log-Eintrag `[INFO] canvas: Scan-Zone: Xpx×Ypx` bestätigt dass der Crop aktiv ist

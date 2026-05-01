@@ -15,9 +15,9 @@ Eine Web-App, die auf Android-Geräten läuft, per Kamera Text von Etiketten lie
 2. Du tippst auf einen Button „REF scannen" → dein Browser öffnet `https://deinname.github.io/liveocr?id=42&name=Damon%20Brackets`
 3. Die App zeigt oben: **„Produkt: Damon Brackets"** und startet die Kamera
 4. Du hältst die Kamera auf das Etikett des Pakets – das Etikett in den **blauen Rahmen** positionieren
-5. Die App verarbeitet nur den Bereich im Rahmen: Graustufen → Kontrastverstärkung → Binarisierung (Schwarz/Weiß) – damit Tesseract.js den Text besser erkennt
-6. Tesseract.js läuft im Hintergrund und erkennt laufend Text – gefiltert auf Zeichen die in Refs vorkommen (`A-Z`, `0-9`, `-`, `/`)
-7. Du siehst den erkannten Text in Echtzeit, z.B. `OW-2241-A`, mit einem farbigen Konfidenz-Balken
+5. Die App verarbeitet nur den Bereich im Rahmen: Graustufen → Kontrastverstärkung → Binarisierung (Schwarz/Weiß)
+6. Tippe auf **„Scannen"** – das Bild wird an Gemini 2.5 Flash (via Apps Script) gesendet, das die REF-Nummer erkennt
+7. Du siehst den erkannten Text, z.B. `OW-2241-A`
 8. Du tippst **„An AppSheet senden"**
 9. Die App schickt `{ id: 42, ref: "OW-2241-A" }` per HTTP-POST an ein Google Apps Script
 10. Das Apps Script sucht im Sheet „Bestellungen" die Zeile mit ID=42 und schreibt `OW-2241-A` in Spalte E (REF-Nummer)
@@ -31,8 +31,8 @@ Eine Web-App, die auf Android-Geräten läuft, per Kamera Text von Etiketten lie
 |---|---|
 | **GitHub Pages** | Hostet die Web-App statisch – kein eigener Server nötig |
 | **`src/camera.js`** | Öffnet die Rückkamera des Geräts |
-| **`src/canvas.js`** | Schneidet den Scan-Rahmen (80 % × 30 %, zentriert) aus dem Kamerabild aus und verarbeitet nur diesen Bereich: Graustufen, Kontrast, adaptives Schwellwertverfahren (Otsu) pro 32×32-Kachel |
-| **`src/ocr.js`** | Verwaltet den Tesseract-Worker (OEM 1, PSM 7), 500 ms-Throttle, Konfidenzfilter ≥ 60 %; lädt Tesseract-Ressourcen von CDN |
+| **`src/canvas.js`** | Schneidet den Scan-Rahmen (80 % × 60 %, zentriert) aus dem Kamerabild aus und verarbeitet nur diesen Bereich: Graustufen, Kontrast, adaptives Schwellwertverfahren (Otsu) pro 32×32-Kachel |
+| **`src/ocr.js`** | Sendet das aufbereitete Kamerabild (50 % skaliert, JPEG q0.7) per POST an den Apps Script Webhook; Gemini 2.5 Flash erkennt die REF-Nummer serverseitig |
 | **`src/send.js`** | Sendet das Ergebnis per POST an Apps Script; wenn offline → speichert in `localStorage` und sendet automatisch wenn Netzwerk zurückkommt |
 | **`src/main.js`** | Liest URL-Parameter (`?id=`, `?name=`, `?mode=`), steuert den gesamten Ablauf |
 | **`apps-script/Code.gs`** | Empfängt den POST, sucht die Zeile per ID, schreibt die REF in Spalte E des Sheets |
@@ -62,12 +62,15 @@ Befülle Spalte A mit fortlaufenden Zahlen. Schreibe in Zelle **A2** die Formel 
 2. Klicke oben auf **Extensions → Apps Script**
 3. Lösche den vorhandenen Code und füge den gesamten Inhalt aus `apps-script/Code.gs` ein
 4. Klicke auf **Speichern** (Disketten-Symbol)
-5. Klicke auf **Deploy → New deployment**
-6. Wähle als Type: **Web app**
-7. Stelle ein:
+5. Gehe zu **Projekteinstellungen → Script Properties** und lege zwei Einträge an:
+   - `GEMINI_API_KEY` = dein Google AI Studio API-Key
+   - `WEBHOOK_SECRET` = ein zufälliger langer String (z.B. via `openssl rand -hex 32`)
+6. Klicke auf **Deploy → New deployment**
+7. Wähle als Type: **Web app**
+8. Stelle ein:
    - Execute as: **Me**
    - Who has access: **Anyone**
-8. Klicke **Deploy** und kopiere die angezeigte **Deployment-URL** (sieht aus wie `https://script.google.com/macros/s/ABC.../exec`)
+9. Klicke **Deploy** und kopiere die angezeigte **Deployment-URL** (sieht aus wie `https://script.google.com/macros/s/ABC.../exec`)
 
 > **Achtung:** Wenn du den Code später änderst, musst du immer eine **neue Deployment-Version** erstellen (Deploy → Manage deployments → New version). Die URL bleibt dabei gleich.
 
@@ -77,9 +80,9 @@ Befülle Spalte A mit fortlaufenden Zahlen. Schreibe in Zelle **A2** die Formel 
 
 1. Erstelle ein neues Repository auf GitHub (z.B. `liveocr`)
 2. Lade alle Dateien aus diesem Projekt hoch oder push den Branch
-3. Gehe zu **Settings → Secrets and variables → Actions → New repository secret**
-   - Name: `APPS_SCRIPT_URL`
-   - Value: die Deployment-URL aus Schritt 2
+3. Gehe zu **Settings → Secrets and variables → Actions → New repository secret** und lege zwei Secrets an:
+   - `APPS_SCRIPT_URL` = die Deployment-URL aus Schritt 2
+   - `WEBHOOK_SECRET` = dasselbe Token wie in Apps Script Script Properties
 4. Gehe zu **Settings → Pages → Source** und wähle **GitHub Actions**
 5. Pushe auf den Branch `main` – GitHub Actions baut die App automatisch und stellt sie unter `https://USERNAME.github.io/liveocr` bereit
 
@@ -119,11 +122,8 @@ Befülle Spalte A mit fortlaufenden Zahlen. Schreibe in Zelle **A2** die Formel 
    - **Ruhige Hand** – halte das Gerät kurz still
    - **Abstand ca. 20–30 cm** vom Etikett
    - Bei unscharfem Bild: **einmal auf das Kamerabild tippen** um den Fokus neu auszulösen
-4. Sobald der Scanner einen Text mit ausreichender Sicherheit erkennt, erscheint er in der Ergebnisbox
-5. Der **Konfidenz-Balken** zeigt wie sicher die Erkennung ist:
-   - Grün (≥80%): zuverlässig
-   - Gelb (60–79%): akzeptabel, aber prüfen
-   - Rot (<60%): wird nicht angezeigt, Scanner versucht es erneut
+4. Tippe auf **„Scannen"** – das Bild wird an Gemini gesendet (dauert ca. 1–3 Sekunden)
+5. Der erkannte REF-Code erscheint in der Ergebnisbox, z.B. `OW-2241-A`
 6. Wenn der angezeigte Text korrekt ist, tippe auf **„An AppSheet senden"**
 7. Der Text wird in Spalte E (REF-Nummer) des Produkts im Sheet gespeichert
 
@@ -154,25 +154,6 @@ Der Scanner funktioniert auch ohne Netzwerkverbindung (z.B. in einem Lager mit s
 
 ---
 
-## Zeichensatz anpassen
-
-Der Scanner ist standardmäßig auf folgende Zeichen eingestellt:
-
-```
-A–Z  0–9  -  /
-```
-
-Falls deine Hersteller-Referenzen andere Zeichen enthalten (z.B. Punkte oder Kleinbuchstaben), passe die Whitelist in `src/ocr.js` an:
-
-```js
-// in tesseractWorker.setParameters(...)
-tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-/.'
-```
-
-Nach der Änderung: `npm run build` ausführen und auf GitHub pushen.
-
----
-
 ## Häufige Probleme
 
 **Kamera startet nicht**
@@ -192,7 +173,8 @@ Nach der Änderung: `npm run build` ausführen und auf GitHub pushen.
   2. Oder im **Inkognito-Tab** öffnen – dieser umgeht den PWA-Cache vollständig
 
 **„Fehler" beim Senden**
-- Prüfe ob die Apps Script URL korrekt als GitHub Secret hinterlegt ist
+- Prüfe ob `APPS_SCRIPT_URL` und `WEBHOOK_SECRET` korrekt als GitHub Secrets hinterlegt sind
+- Prüfe ob `GEMINI_API_KEY` und `WEBHOOK_SECRET` in den Apps Script Script Properties gesetzt sind
 - Teste den Webhook manuell (siehe unten)
 - Stelle sicher, dass das Apps Script als **„Anyone"** zugänglich deployed ist
 
@@ -210,14 +192,14 @@ Bevor du die App das erste Mal benutzt, kannst du das Apps Script direkt testen:
 **Write-Modus testen** (schreibt REF in Zeile mit ID=1):
 ```bash
 curl -L -X POST "DEINE_APPS_SCRIPT_URL" \
-  -d '{"id":"1","ref":"TEST-001","confidence":95}'
+  -d '{"id":"1","ref":"TEST-001","confidence":95,"secret":"DEIN_WEBHOOK_SECRET"}'
 ```
 → Öffne danach das Sheet und prüfe ob in der Zeile mit ID=1 in Spalte E der Wert `TEST-001` steht.
 
 **Standalone-Modus testen** (schreibt in OCR_Results):
 ```bash
 curl -L -X POST "DEINE_APPS_SCRIPT_URL" \
-  -d '{"ref":"TEST-002","confidence":80,"timestamp":"2026-01-01T10:00:00Z"}'
+  -d '{"ref":"TEST-002","confidence":80,"timestamp":"2026-01-01T10:00:00Z","secret":"DEIN_WEBHOOK_SECRET"}'
 ```
 → Prüfe ob im Sheet „OCR_Results" eine neue Zeile erschienen ist.
 
@@ -226,5 +208,4 @@ curl -L -X POST "DEINE_APPS_SCRIPT_URL" \
 ## Was noch nicht möglich ist
 
 - **Suchen:** Man kann noch kein unbekanntes Etikett scannen und herausfinden, welchem Produkt es gehört. Diese Funktion ist technisch vorbereitet (Search-Modus) und kann in einem nächsten Schritt aktiviert werden.
-- **Authentifizierung:** Wer die URL kennt, kann Daten ins Sheet schreiben. Für internen Gebrauch im eigenen Netzwerk ist das in der Regel unkritisch.
 - **Barcode / QR-Code:** Die App erkennt gedruckten Text per OCR – keine Barcodes oder QR-Codes.
