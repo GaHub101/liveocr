@@ -55,6 +55,8 @@ export async function scheduleRecognition(canvas, onResult) {
     if (result.status === 'ok' && result.ref) {
       log.info('ocr', `Erkannt via Gemini: ${result.ref}`);
       onResult(result.ref, 100);
+    } else if (result.status === 'error') {
+      log.error('ocr', `Gemini API Fehler: ${result.message}`, result.raw ?? '');
     } else {
       log.warn('ocr', `Kein REF gefunden – Gemini: "${result.raw ?? ''}" (status: ${result.status})`);
     }

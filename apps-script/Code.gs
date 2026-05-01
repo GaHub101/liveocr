@@ -161,13 +161,22 @@ function handleGeminiOcr(base64Image, promptText) {
     muteHttpExceptions: true
   });
 
-  var result = JSON.parse(resp.getContentText());
-  var raw = '';
-  if (result.candidates && result.candidates[0] && result.candidates[0].content &&
-      result.candidates[0].content.parts && result.candidates[0].content.parts[0]) {
-    raw = (result.candidates[0].content.parts[0].text || '').trim();
+  var responseText = resp.getContentText();
+  var result = JSON.parse(responseText);
+
+  // Surface Gemini API errors (rate limit, invalid key, quota, etc.)
+  if (result.error) {
+    var errMsg = result.error.code + ': ' + result.error.message;
+    Logger.log('handleGeminiOcr: Gemini API Fehler – ' + errMsg);
+    return jsonResponse({ status: 'error', message: errMsg, raw: '' });
   }
 
+  if (!result.candidates || !result.candidates[0] || !result.candidates[0].content) {
+    Logger.log('handleGeminiOcr: keine Candidates – ' + responseText.substring(0, 300));
+    return jsonResponse({ status: 'error', message: 'Keine Antwort von Gemini', raw: responseText.substring(0, 200) });
+  }
+
+  var raw = (result.candidates[0].content.parts[0].text || '').trim();
   var ref = (raw === 'NONE' || raw === '') ? '' : raw;
   Logger.log('handleGeminiOcr: raw="' + raw + '" ref=' + (ref || '(leer)'));
   return jsonResponse({ status: ref ? 'ok' : 'not_found', ref: ref, raw: raw.substring(0, 200) });
