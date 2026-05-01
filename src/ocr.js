@@ -1,6 +1,6 @@
 import { log } from './logger.js';
 
-const THROTTLE_MS = 3000;
+const THROTTLE_MS = 5000;
 const WEBHOOK_URL = import.meta.env.VITE_APPS_SCRIPT_URL || '';
 
 const GEMINI_PROMPT =
