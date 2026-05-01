@@ -142,7 +142,7 @@ function handleGeminiOcr(base64Image, promptText) {
     return jsonResponse({ status: 'error', message: 'GEMINI_API_KEY nicht konfiguriert' });
   }
 
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent?key=' + apiKey;
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
   var prompt = promptText ||
     'This is a product label. Find the REF number. Return ONLY the code. If none found, return NONE.';
 
