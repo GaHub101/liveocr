@@ -176,10 +176,9 @@
       margin-top: 4px;
     }
 
-    #send-btn {
+    #scan-btn, #send-btn {
       width: 100%;
       padding: 16px;
-      background: #3b82f6;
       color: #fff;
       font-size: 1rem;
       font-weight: 600;
@@ -190,12 +189,28 @@
       -webkit-tap-highlight-color: transparent;
     }
 
+    #scan-btn {
+      background: #3b82f6;
+      font-size: 1.1rem;
+    }
+
+    #scan-btn:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    #scan-btn:not(:disabled):active { background: #2563eb; }
+
+    #send-btn {
+      background: #1e40af;
+    }
+
     #send-btn:disabled {
       opacity: 0.4;
       cursor: default;
     }
 
-    #send-btn:not(:disabled):active { background: #2563eb; }
+    #send-btn:not(:disabled):active { background: #1e3a8a; }
 
     #queue-info {
       font-size: 0.75rem;
@@ -368,6 +383,7 @@
       <div id="confidence-label"></div>
     </div>
 
+    <button id="scan-btn">Scannen</button>
     <button id="send-btn" disabled>An AppSheet senden</button>
     <div id="queue-info"></div>
   </div>

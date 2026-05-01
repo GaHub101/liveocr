@@ -11,6 +11,7 @@ import {
 
 const video   = document.getElementById('video');
 const canvas  = document.getElementById('canvas');
+const scanBtn = document.getElementById('scan-btn');
 const sendBtn = document.getElementById('send-btn');
 
 // URL-Parameter auslesen
@@ -56,20 +57,29 @@ async function main() {
   setStatus('Bereit', 'ready');
   updateQueueBadge(getQueueLength());
 
-  // Erkennungsschleife
+  // Canvas-Loop für Debug-Vorschau (kein Auto-Scan)
   function loop() {
-    const ok = preprocessFrame(video, canvas);
-    if (ok) {
-      scheduleRecognition(canvas, (text, confidence) => {
-        lastText       = text;
-        lastConfidence = confidence;
-        showResult(text, confidence);
-        setStatus('Erkannt', 'ready');
-      });
-    }
+    preprocessFrame(video, canvas);
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
+
+  // Scan-Button
+  scanBtn.addEventListener('click', async () => {
+    if (!preprocessFrame(video, canvas)) return;
+    scanBtn.disabled = true;
+    scanBtn.textContent = 'Scannt…';
+    setStatus('Scannt…', 'working');
+    await scheduleRecognition(canvas, (text, confidence) => {
+      lastText       = text;
+      lastConfidence = confidence;
+      showResult(text, confidence);
+      setStatus('Erkannt', 'ready');
+    });
+    scanBtn.disabled = false;
+    scanBtn.textContent = 'Scannen';
+    if (!lastText) setStatus('Kein REF gefunden – erneut versuchen', 'error');
+  });
 
   // Senden
   sendBtn.addEventListener('click', async () => {

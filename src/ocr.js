@@ -1,6 +1,5 @@
 import { log } from './logger.js';
 
-const THROTTLE_MS = 5000;
 const WEBHOOK_URL = import.meta.env.VITE_APPS_SCRIPT_URL || '';
 
 const GEMINI_PROMPT =
@@ -11,7 +10,6 @@ const GEMINI_PROMPT =
   'If the REF code is partially unclear, give your best reading. ' +
   'If there is truly no REF code visible, return exactly: NONE';
 
-let lastRunAt = 0;
 let busy = false;
 
 export async function initOCR() {
@@ -31,9 +29,6 @@ export async function initOCR() {
 
 export async function scheduleRecognition(canvas, onResult) {
   if (busy) return;
-  const now = Date.now();
-  if (now - lastRunAt < THROTTLE_MS) return;
-  lastRunAt = now;
   busy = true;
 
   try {
