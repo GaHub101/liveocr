@@ -143,9 +143,17 @@ function handleGeminiOcr(base64Image) {
   }
 
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey;
+  var prompt =
+    'You are reading a dental or medical product label. Find the REF number (product reference/article number).\n' +
+    'The REF number appears next to or below the text "REF" — which is often printed inside a small bordered box or next to a symbol.\n' +
+    'The code consists of digits, letters, hyphens or slashes (examples: "630-0032", "012345A", "4352/B").\n' +
+    'Return ONLY the code itself — no extra words, no explanation.\n' +
+    'If you can see a REF code but it is partially unclear, give your best reading.\n' +
+    'If there is truly no REF code visible at all, return exactly: NONE';
+
   var body = {
     contents: [{ parts: [
-      { text: 'This is a product label. Find the REF number (reference/article number). Return ONLY the code after "REF", nothing else. If none found, return empty string.' },
+      { text: prompt },
       { inline_data: { mime_type: 'image/jpeg', data: base64Image } }
     ]}],
     generationConfig: { maxOutputTokens: 50, temperature: 0 }
@@ -165,7 +173,7 @@ function handleGeminiOcr(base64Image) {
     raw = (result.candidates[0].content.parts[0].text || '').trim();
   }
 
-  var ref = raw;
+  var ref = (raw === 'NONE' || raw === '') ? '' : raw;
   Logger.log('handleGeminiOcr: raw="' + raw + '" ref=' + (ref || '(leer)'));
   return jsonResponse({ status: ref ? 'ok' : 'not_found', ref: ref, raw: raw.substring(0, 200) });
 }
