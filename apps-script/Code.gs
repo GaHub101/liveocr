@@ -40,7 +40,7 @@ function doPost(e) {
     Logger.log('doPost: payload action=' + (payload.action || 'none') + ' id=' + (payload.id || ''));
 
     if (payload.action === 'ocr') {
-      return handleGeminiOcr(payload.image);
+      return handleGeminiOcr(payload.image, payload.prompt);
     }
 
     if (payload.id) {
@@ -135,7 +135,7 @@ function appendLog(payload) {
 // Gemini OCR
 // ---------------------------------------------------------------------------
 
-function handleGeminiOcr(base64Image) {
+function handleGeminiOcr(base64Image, promptText) {
   var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) {
     Logger.log('handleGeminiOcr: GEMINI_API_KEY fehlt in Script Properties');
@@ -143,13 +143,8 @@ function handleGeminiOcr(base64Image) {
   }
 
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey;
-  var prompt =
-    'You are reading a dental or medical product label. Find the REF number (product reference/article number).\n' +
-    'The REF number appears next to or below the text "REF" — which is often printed inside a small bordered box or next to a symbol.\n' +
-    'The code consists of digits, letters, hyphens or slashes (examples: "630-0032", "012345A", "4352/B").\n' +
-    'Return ONLY the code itself — no extra words, no explanation.\n' +
-    'If you can see a REF code but it is partially unclear, give your best reading.\n' +
-    'If there is truly no REF code visible at all, return exactly: NONE';
+  var prompt = promptText ||
+    'This is a product label. Find the REF number. Return ONLY the code. If none found, return NONE.';
 
   var body = {
     contents: [{ parts: [
