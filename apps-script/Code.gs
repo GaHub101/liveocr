@@ -176,7 +176,10 @@ function handleGeminiOcr(base64Image, promptText) {
     return jsonResponse({ status: 'error', message: 'Keine Antwort von Gemini', raw: responseText.substring(0, 200) });
   }
 
-  var raw = (result.candidates[0].content.parts[0].text || '').trim();
+  // gemini-2.5-flash returns thinking parts (thought:true) — filter them out
+  var parts = result.candidates[0].content.parts || [];
+  var textParts = parts.filter(function(p) { return !p.thought && p.text; });
+  var raw = textParts.length > 0 ? textParts[textParts.length - 1].text.trim() : '';
   var ref = (raw === 'NONE' || raw === '') ? '' : raw;
   Logger.log('handleGeminiOcr: raw="' + raw + '" ref=' + (ref || '(leer)'));
   return jsonResponse({ status: ref ? 'ok' : 'not_found', ref: ref, raw: raw.substring(0, 200) });
