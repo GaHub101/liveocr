@@ -1,6 +1,7 @@
 import { log } from './logger.js';
 
 const WEBHOOK_URL = import.meta.env.VITE_APPS_SCRIPT_URL || '';
+const WEBHOOK_SECRET = import.meta.env.VITE_WEBHOOK_SECRET || '';
 
 let busy = false;
 
@@ -10,7 +11,7 @@ export async function initOCR() {
   try {
     const resp = await fetch(WEBHOOK_URL, {
       method: 'POST',
-      body: JSON.stringify({ action: 'ping' }),
+      body: JSON.stringify({ action: 'ping', secret: WEBHOOK_SECRET }),
     });
     const result = await resp.json();
     log.info('ocr', `Verbindungstest OK: status=${result.status}`);
@@ -39,7 +40,7 @@ export async function scheduleRecognition(canvas, onResult) {
 
     const resp = await fetch(WEBHOOK_URL, {
       method: 'POST',
-      body: JSON.stringify({ action: 'ocr', image: base64 }),
+      body: JSON.stringify({ action: 'ocr', image: base64, secret: WEBHOOK_SECRET }),
     });
 
     const result = await resp.json();
