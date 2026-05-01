@@ -151,7 +151,7 @@ function handleGeminiOcr(base64Image, promptText) {
       { text: prompt },
       { inline_data: { mime_type: 'image/jpeg', data: base64Image } }
     ]}],
-    generationConfig: { maxOutputTokens: 50, temperature: 0 }
+    generationConfig: { maxOutputTokens: 50, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
   };
 
   var resp = UrlFetchApp.fetch(url, {
