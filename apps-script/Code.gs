@@ -40,7 +40,7 @@ function doPost(e) {
     Logger.log('doPost: payload action=' + (payload.action || 'none') + ' id=' + (payload.id || ''));
 
     if (payload.action === 'ocr') {
-      return handleGeminiOcr(payload.image, payload.prompt);
+      return handleGeminiOcr(payload.image);
     }
 
     if (payload.id) {
@@ -135,7 +135,7 @@ function appendLog(payload) {
 // Gemini OCR
 // ---------------------------------------------------------------------------
 
-function handleGeminiOcr(base64Image, promptText) {
+function handleGeminiOcr(base64Image) {
   var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) {
     Logger.log('handleGeminiOcr: GEMINI_API_KEY fehlt in Script Properties');
@@ -143,8 +143,7 @@ function handleGeminiOcr(base64Image, promptText) {
   }
 
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
-  var prompt = promptText ||
-    'This is a product label. Find the REF number. Return ONLY the code. If none found, return NONE.';
+  var prompt = 'Find the REF code on this product label (digits, letters, hyphens or slashes — e.g. "630-0032", "012345A"). It appears next to or below "REF", often in a box. Return ONLY the code. If unclear, best guess. If none visible: NONE';
 
   var body = {
     contents: [{ parts: [
