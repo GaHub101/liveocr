@@ -37,23 +37,27 @@ export function showResult(text, confidence) {
 export function setSendState(state) {
   if (state === 'sending') {
     sendBtn.disabled = true;
-    sendBtn.textContent = 'Sende…';
+    sendBtn.textContent = 'Füge hinzu…';
   } else if (state === 'sent') {
-    sendBtn.textContent = 'Gesendet ✓';
+    sendBtn.textContent = 'Hinzugefügt ✓';
     setTimeout(() => {
-      sendBtn.textContent = 'An AppSheet senden';
+      sendBtn.textContent = 'REF-Nr. hinzufügen';
       sendBtn.disabled = false;
     }, 2000);
   } else if (state === 'error') {
     sendBtn.disabled = false;
     sendBtn.textContent = 'Fehler – Erneut versuchen';
-    setTimeout(() => { sendBtn.textContent = 'An AppSheet senden'; }, 3000);
+    setTimeout(() => { sendBtn.textContent = 'REF-Nr. hinzufügen'; }, 3000);
   } else if (state === 'queued') {
     sendBtn.textContent = 'In Warteschlange ✓';
     setTimeout(() => {
-      sendBtn.textContent = 'An AppSheet senden';
+      sendBtn.textContent = 'REF-Nr. hinzufügen';
       sendBtn.disabled = false;
     }, 2000);
+  } else if (state === 'already_exists') {
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'REF bereits vorhanden';
+    setTimeout(() => { sendBtn.textContent = 'REF-Nr. hinzufügen'; }, 3000);
   }
 }
 

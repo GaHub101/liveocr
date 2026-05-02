@@ -23,6 +23,7 @@ export async function sendOrQueue(payload, onQueueChange) {
     await flushQueue(onQueueChange);
     const result = await postToSheet(payload);
     log.info('send', `Gesendet: ref="${payload.ref}"${payload.id ? ` id=${payload.id}` : ''}`, result);
+    return result;
   } else {
     enqueue(payload);
     log.warn('send', `Offline – in Queue gespeichert: ref="${payload.ref}"`, `Queue: ${getQueueLength()}`);
