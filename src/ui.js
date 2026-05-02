@@ -147,12 +147,36 @@ export function setLookupModal(state, ref, suggestion) {
   confirmBtn.style.display = state === 'form'    ? 'inline-block' : 'none';
 
   if (state === 'form') {
-    const s = suggestion || {};
-    document.getElementById('lk-name').value       = s.artikelname || '';
-    document.getElementById('lk-hersteller').value = s.hersteller  || '';
-    document.getElementById('lk-cat').value        = s.kategorie   || '';
-    ['lk-sup','lk-alt1','lk-alt2','lk-alt3','lk-alt4','lk-code','lk-loc']
+    // Modal öffnet leer; Hersteller wird vom Nutzer eingegeben, Vorschlag dann via Button geladen
+    ['lk-name','lk-hersteller','lk-cat','lk-sup','lk-alt1','lk-alt2','lk-alt3','lk-alt4','lk-code','lk-loc']
       .forEach(id => { document.getElementById(id).value = ''; });
+    const status = document.getElementById('lk-suggest-status');
+    if (status) status.textContent = '';
+    const sBtn = document.getElementById('lk-suggest-btn');
+    if (sBtn) { sBtn.disabled = false; sBtn.textContent = 'Vorschlag laden'; }
+    setTimeout(() => document.getElementById('lk-hersteller').focus(), 0);
+  }
+}
+
+export function applyLookupSuggestion(suggestion) {
+  const s    = suggestion || {};
+  const alts = Array.isArray(s.alt_lieferanten) ? s.alt_lieferanten : [];
+  if (s.artikelname) document.getElementById('lk-name').value = s.artikelname;
+  if (s.kategorie)   document.getElementById('lk-cat').value  = s.kategorie;
+  // Hauptlieferant (lk-sup) bleibt leer — manuelle Auswahl im Sheet
+  document.getElementById('lk-alt1').value = alts[0] || '';
+  document.getElementById('lk-alt2').value = alts[1] || '';
+  document.getElementById('lk-alt3').value = alts[2] || '';
+  document.getElementById('lk-alt4').value = alts[3] || '';
+}
+
+export function setSuggestStatus(msg, state = 'idle') {
+  const el  = document.getElementById('lk-suggest-status');
+  const btn = document.getElementById('lk-suggest-btn');
+  if (el)  el.textContent = msg;
+  if (btn) {
+    btn.disabled    = state === 'loading';
+    btn.textContent = state === 'loading' ? 'Lade…' : 'Vorschlag laden';
   }
 }
 

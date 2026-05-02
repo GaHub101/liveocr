@@ -33,10 +33,10 @@ export async function markReorder(id) {
   }
 }
 
-export async function lookupProduct(ref) {
+export async function lookupProduct(ref, hersteller = '') {
   try {
-    const data = await post({ action: 'lookupProduct', ref });
-    log.info('prices', `lookupProduct: ref="${ref}" → ${data.suggestion ? 'Vorschlag gefunden' : 'kein Vorschlag'}`);
+    const data = await post({ action: 'lookupProduct', ref, hersteller });
+    log.info('prices', `lookupProduct: ref="${ref}", hersteller="${hersteller}" → ${data.suggestion ? 'Vorschlag' : 'leer'}`);
     return data.suggestion || {};
   } catch (err) {
     log.warn('prices', `lookupProduct fehlgeschlagen: ref="${ref}" – ${err.message}`);

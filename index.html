@@ -339,6 +339,24 @@
     #lookup-confirm-btn { background: #1e40af; flex: 2; }
     #lookup-confirm-btn:disabled { opacity: 0.4; cursor: default; }
 
+    #lk-suggest-btn {
+      background: #1e40af;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 13px;
+      margin-top: 4px;
+      cursor: pointer;
+    }
+    #lk-suggest-btn:disabled { opacity: 0.5; cursor: default; }
+    #lk-suggest-status {
+      font-size: 12px;
+      color: #94a3b8;
+      min-height: 1em;
+      margin: 4px 0 8px;
+    }
+
     #loading-screen {
       position: fixed;
       inset: 0;
@@ -521,8 +539,10 @@
       <div id="lookup-ref-line"></div>
       <div id="lookup-loading">Suche läuft…</div>
       <div id="lookup-form" style="display:none">
-        <label>Artikelname *<input id="lk-name" type="text" required></label>
         <label>Hersteller<input id="lk-hersteller" type="text"></label>
+        <button id="lk-suggest-btn" type="button">Vorschlag laden</button>
+        <div id="lk-suggest-status"></div>
+        <label>Artikelname *<input id="lk-name" type="text" required></label>
         <label>Kategorie<input id="lk-cat" type="text"></label>
         <label>Hauptlieferant<input id="lk-sup" type="text"></label>
         <label>Alt. Lieferant 1<input id="lk-alt1" type="text"></label>

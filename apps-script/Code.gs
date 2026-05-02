@@ -382,21 +382,42 @@ function handleGeminiOcr(base64Image, mimeType) {
 // ---------------------------------------------------------------------------
 
 function handleLookupProduct(payload) {
-  var ref = String(payload.ref || '').trim();
+  var ref        = String(payload.ref        || '').trim();
+  var hersteller = String(payload.hersteller || '').trim();
   if (!ref) return jsonResponse({ status: 'error', message: 'ref fehlt' });
 
   var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) return jsonResponse({ status: 'ok', suggestion: {} });
 
-  var url    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
-  var prompt = 'Medizinprodukt-Experte. REF: "' + ref + '". '
-    + 'Bestimme Artikelname, Hersteller, Kategorie (z.B. Brackets, Bänder, Drähte, Instrumente). '
-    + 'Antworte NUR als JSON: {"artikelname":"","hersteller":"","kategorie":""}. '
-    + 'Unbekannte Felder = leerer String.';
+  // Bekannte Lieferantennamen aus "Lieferanten"-Sheet einlesen
+  var supplierNames = [];
+  var ss     = SpreadsheetApp.getActiveSpreadsheet();
+  var lSheet = ss.getSheetByName(SUPPLIERS_SHEET);
+  if (lSheet) {
+    var lData = lSheet.getDataRange().getValues();
+    for (var i = 1; i < lData.length; i++) {
+      var sName = String(lData[i][0]).trim();
+      if (sName) supplierNames.push(sName);
+    }
+  }
 
+  var supplierHint = supplierNames.length > 0
+    ? ' Wähle in "alt_lieferanten" maximal 4 Lieferanten aus DIESER Liste (exakte Schreibweise), bei denen das Produkt typischerweise erhältlich ist: '
+      + supplierNames.join(', ') + '. Wenn keiner passt: leeres Array [].'
+    : '';
+
+  var prompt = 'Du bist Experte für medizinische/zahnmedizinische Produkte. '
+    + 'Hersteller: "' + hersteller + '", REF-Nummer: "' + ref + '". '
+    + 'Bestimme: Artikelname (offizielle Produktbezeichnung des Herstellers für diese REF), '
+    + 'Kategorie (z.B. Brackets, Bänder, Drähte, Instrumente, Verbrauchsmaterial).'
+    + supplierHint
+    + ' Antworte NUR als JSON: {"artikelname":"","kategorie":"","alt_lieferanten":[]}. '
+    + 'Unbekannte/unsichere Felder = leerer String bzw. leeres Array. Keine Spekulation.';
+
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
   var body = {
     contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { maxOutputTokens: 80, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
+    generationConfig: { maxOutputTokens: 250, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
   };
 
   try {
@@ -405,13 +426,13 @@ function handleLookupProduct(payload) {
       payload: JSON.stringify(body), muteHttpExceptions: true
     });
     var result = JSON.parse(resp.getContentText());
-    var parts  = (result.candidates && result.candidates[0] &&
+    var rParts = (result.candidates && result.candidates[0] &&
                   result.candidates[0].content && result.candidates[0].content.parts) || [];
-    var textParts = parts.filter(function(p) { return !p.thought && p.text; });
+    var textParts = rParts.filter(function(p) { return !p.thought && p.text; });
     var raw = textParts.length > 0 ? textParts[textParts.length - 1].text.trim() : '{}';
     var jsonMatch = raw.match(/\{[\s\S]*\}/);
     var suggestion = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
-    logUsage('lookupProduct', 'ok', 'ref=' + ref);
+    logUsage('lookupProduct', 'ok', 'ref=' + ref + ' hersteller=' + hersteller);
     return jsonResponse({ status: 'ok', suggestion: suggestion });
   } catch (err) {
     Logger.log('handleLookupProduct ERROR: ' + err.message);

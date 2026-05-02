@@ -9,6 +9,7 @@ import {
   showProductBanner, showSupplierLinks,
   showLookupButton, setLookupModal, getLookupFormValues,
   showReorderButton, setReorderState,
+  applyLookupSuggestion, setSuggestStatus,
 } from './ui.js';
 import { checkRef, lookupProduct, addProduct, getProductSuppliers, markReorder } from './prices.js';
 
@@ -105,15 +106,38 @@ async function main() {
     // "REF-Nr. hinzufügen" entfällt im Standalone-Modus – OCR_Results wird automatisch geloggt
     sendBtn.style.display = 'none';
 
-    lookupBtn.addEventListener('click', async () => {
+    lookupBtn.addEventListener('click', () => {
       if (!lastText) return;
-      lookupBtn.disabled = true;
-      setLookupModal('loading', lastText, null);
-      const suggestion = await lookupProduct(lastText);
-      setLookupModal('form', lastText, suggestion);
-      lookupBtn.disabled = false;
+      // Modal direkt als leeres Formular öffnen — Hersteller wird manuell eingegeben
+      setLookupModal('form', lastText, null);
     });
     lookupCancel.addEventListener('click', () => setLookupModal('hidden'));
+
+    // "Vorschlag laden": Hersteller + REF an Gemini, befüllt Artikelname/Kategorie/Alt-Lieferanten
+    const suggestBtn      = document.getElementById('lk-suggest-btn');
+    const herstellerInput = document.getElementById('lk-hersteller');
+    async function loadSuggestion() {
+      const hersteller = herstellerInput.value.trim();
+      if (!hersteller) {
+        setSuggestStatus('Bitte zuerst Hersteller eingeben');
+        herstellerInput.focus();
+        return;
+      }
+      setSuggestStatus('Lade Vorschlag…', 'loading');
+      const suggestion = await lookupProduct(lastText, hersteller);
+      applyLookupSuggestion(suggestion);
+      const filled = [suggestion.artikelname, suggestion.kategorie].filter(Boolean).length;
+      const altsN  = Array.isArray(suggestion.alt_lieferanten) ? suggestion.alt_lieferanten.length : 0;
+      setSuggestStatus(
+        filled > 0 || altsN > 0
+          ? `Vorschlag geladen (${filled} Felder, ${altsN} Lieferanten)`
+          : 'Kein Vorschlag — bitte manuell ausfüllen',
+      );
+    }
+    suggestBtn.addEventListener('click', loadSuggestion);
+    herstellerInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); loadSuggestion(); }
+    });
     lookupConfirm.addEventListener('click', async () => {
       const vals = getLookupFormValues();
       if (!vals.name) { document.getElementById('lk-name').focus(); return; }
