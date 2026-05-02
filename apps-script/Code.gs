@@ -26,6 +26,10 @@ var USAGE_LOG_SHEET    = 'Nutzungslog';
 var REF_COL            = 5; // Spalte E (1-based)
 var ID_COL_INDEX       = 0; // Spalte A (0-based für Array-Zugriff)
 
+// 🔴 [FIX] Max. erlaubte Base64-Länge (~7 MB dekodiert → ~9.3 MB base64)
+// UrlFetchApp-Limit: 10 MB Payload. Puffer nach unten für JSON-Overhead.
+var MAX_BASE64_LENGTH  = 9 * 1024 * 1024; // 9 MB
+
 // ---------------------------------------------------------------------------
 // HTTP-Endpunkte
 // ---------------------------------------------------------------------------
@@ -39,9 +43,16 @@ function doPost(e) {
 
     var payload = JSON.parse(e.postData.contents);
 
+    // 🔴 [FIX] Secret ist jetzt Pflicht – kein WEBHOOK_SECRET = Zugriff blockiert
     var secret = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
-    if (secret && payload.secret !== secret) {
-      Logger.log('doPost: Unauthorized – falsches oder fehlendes Secret');
+    if (!secret) {
+      Logger.log('doPost: WEBHOOK_SECRET nicht konfiguriert – Zugriff verweigert');
+      logUsage('auth', 'error', 'WEBHOOK_SECRET fehlt in Script Properties');
+      return jsonResponse({ status: 'error', message: 'Server-Konfigurationsfehler: Secret nicht gesetzt' });
+    }
+    if (payload.secret !== secret) {
+      Logger.log('doPost: Unauthorized – falsches Secret');
+      logUsage('auth', 'error', 'Falsches Secret');
       return jsonResponse({ status: 'error', message: 'Unauthorized' });
     }
 
@@ -113,6 +124,28 @@ function writeRef(payload) {
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][ID_COL_INDEX]) === String(payload.id)) {
       var ref = String(payload.ref).trim();
+
+      // 🟡 [FIX] Idempotenz: vorhandenen Wert prüfen, nicht blind überschreiben
+      var existingRef = String(data[i][REF_COL - 1]).trim();
+      if (existingRef !== '' && existingRef !== ref) {
+        Logger.log('writeRef: Konflikt – id=' + payload.id + ' existingRef=' + existingRef + ' newRef=' + ref);
+        logUsage('writeRef', 'conflict', 'id=' + payload.id + ' existing=' + existingRef + ' new=' + ref);
+        return jsonResponse({
+          status: 'conflict',
+          message: 'REF bereits befüllt',
+          existingRef: existingRef,
+          row: i + 1,
+          id: payload.id
+        });
+      }
+
+      // Bereits identischer Wert → idempotent, kein erneutes Schreiben
+      if (existingRef === ref) {
+        Logger.log('writeRef: idempotent – id=' + payload.id + ' ref=' + ref + ' (bereits gesetzt, kein Update)');
+        logUsage('writeRef', 'skipped', 'id=' + payload.id + ' ref=' + ref + ' bereits vorhanden');
+        return jsonResponse({ status: 'ok', row: i + 1, id: payload.id, skipped: true });
+      }
+
       sheet.getRange(i + 1, REF_COL).setValue(ref);
       Logger.log('writeRef: OK – id=' + payload.id + ' row=' + (i + 1) + ' ref=' + ref);
       logUsage('writeRef', 'ok', 'id=' + payload.id + ' ref=' + ref);
@@ -130,6 +163,13 @@ function writeRef(payload) {
 // ---------------------------------------------------------------------------
 
 function appendLog(payload) {
+  // 🟡 [FIX] Mindestvalidierung: ref muss vorhanden sein
+  if (!payload.ref || String(payload.ref).trim() === '') {
+    Logger.log('appendLog: ref fehlt – Eintrag abgelehnt');
+    logUsage('appendLog', 'error', 'ref fehlt oder leer – kein Eintrag');
+    return jsonResponse({ status: 'error', message: 'ref fehlt oder leer – kein Log-Eintrag erstellt' });
+  }
+
   var ss    = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(LOG_SHEET);
   if (!sheet) {
@@ -146,8 +186,8 @@ function appendLog(payload) {
     payload.queuedAt   || '',
   ]);
 
-  Logger.log('appendLog: ref=' + (payload.ref || '(leer)') + ' confidence=' + payload.confidence);
-  logUsage('send', 'ok', 'ref=' + (payload.ref || '(leer)') + ' confidence=' + (payload.confidence != null ? payload.confidence : ''));
+  Logger.log('appendLog: ref=' + payload.ref + ' confidence=' + payload.confidence);
+  logUsage('send', 'ok', 'ref=' + payload.ref + ' confidence=' + (payload.confidence != null ? payload.confidence : ''));
   return jsonResponse({ status: 'ok' });
 }
 
@@ -173,6 +213,21 @@ function appendLog(payload) {
 // ---------------------------------------------------------------------------
 
 function handleGeminiOcr(base64Image) {
+  // 🔴 [FIX] Image-Validierung: fehlendes oder zu großes Bild abfangen
+  if (!base64Image || typeof base64Image !== 'string' || base64Image.trim() === '') {
+    Logger.log('handleGeminiOcr: kein Bild übermittelt');
+    logUsage('ocr', 'error', 'base64Image fehlt oder leer');
+    return jsonResponse({ status: 'error', message: 'Kein Bild übermittelt' });
+  }
+  if (base64Image.length > MAX_BASE64_LENGTH) {
+    Logger.log('handleGeminiOcr: Bild zu groß – ' + base64Image.length + ' Zeichen (Max: ' + MAX_BASE64_LENGTH + ')');
+    logUsage('ocr', 'error', 'Bild zu groß: ' + base64Image.length + ' Zeichen');
+    return jsonResponse({
+      status: 'error',
+      message: 'Bild zu groß – max. ~7 MB (vor Base64-Encoding). Bitte komprimieren.'
+    });
+  }
+
   var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) {
     Logger.log('handleGeminiOcr: GEMINI_API_KEY fehlt in Script Properties');
