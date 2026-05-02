@@ -29,7 +29,7 @@ Single-page PWA (Vite + vite-plugin-pwa), no framework. `index.html` is the app 
 
 ```
 Camera (getUserMedia, rear-facing)
-  → canvas.js  – crop to scan zone (80%×30%, centred), grayscale → P5/P95 contrast stretch → adaptive Otsu binarisation (32×32 tiles)
+  → canvas.js  – crop to scan zone (80%×60%, centred), 20 px white padding, colour image
   → ocr.js     – Gemini 2.5 Flash via Apps Script webhook; canvas frame → base64-JPEG → POST
   → main.js    – user clicks Send
   → send.js    – fetch() POST → Apps Script webhook; offline: localStorage queue, flushed on reconnect
@@ -41,7 +41,7 @@ Camera (getUserMedia, rear-facing)
 | File | Purpose |
 |---|---|
 | `src/camera.js` | `getUserMedia`, rear camera (`facingMode: environment`) |
-| `src/canvas.js` | Crop to scan zone (80%×30%, centred) + preprocessing: greyscale → P5/P95 contrast stretch → adaptive Otsu binarisation (32×32 tiles) |
+| `src/canvas.js` | Crop to scan zone (80%×60%, centred) + 20 px white padding. Sends colour image directly to Gemini – no grayscale or binarisation. |
 | `src/ocr.js` | Gemini 2.5 Flash via Apps Script webhook. Canvas frame → downscaled 50 % → JPEG (q0.7) → base64 → POST. Prompt is hardcoded server-side. |
 | `src/send.js` | `fetch()` without `Content-Type` header (simple request, no CORS preflight). Offline queue in `localStorage` (`ocr_send_queue`), auto-flush on `online` event |
 | `src/logger.js` | Ring-buffer log, max. 300 entries, `localStorage`. Debug overlay via `?debug` URL param |
@@ -92,7 +92,7 @@ Populate column A with `=ROW()-1` from A2 downwards. IDs must not change. Deploy
 
 The first `[INFO] canvas:` log entry confirms the crop is active:
 ```
-[INFO] canvas: Scan-Zone: 1024×216px (Vollbild: 1280×720px)
+[INFO] canvas: Scan-Zone: 808×472px → OCR-Input: 848×512px (Farbe, 20px pad, angezeigt: 1008×756px, Vollbild: 1280×720px)
 ```
 If scan zone equals full frame, the crop is not working (likely a cache issue).
 
