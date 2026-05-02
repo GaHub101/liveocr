@@ -42,7 +42,7 @@ langPath:   'https://tessdata.projectnaptha.com/4.0.0'
 **Status:** behoben in Commit `942c491`  
 **Symptom:** OCR-Text enthielt 30+ Zeilen Rauschen aus dem gesamten Hintergrund. Konfidenz konstant unter 15 %.  
 **Ursache:** `canvas.js` zeichnete den kompletten Video-Frame (`1280×720 px`) auf den Canvas und verarbeitete alles.  
-**Fix:** Canvas wird auf die Scan-Zone zugeschnitten (`zoneW × zoneH`, 80 % × 30 %, zentriert) – entspricht exakt dem blauen Rahmen-Overlay. Verarbeitete Pixel reduziert von ~921.000 auf ~88.000 (~10×).
+**Fix:** Canvas wird auf die Scan-Zone zugeschnitten (`zoneW × zoneH`, 80 % × 60 %, zentriert) – entspricht exakt dem blauen Rahmen-Overlay. Verarbeitete Pixel reduziert von ~921.000 auf ~88.000 (~10×).
 
 ---
 

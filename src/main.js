@@ -103,7 +103,11 @@ async function main() {
 
   // Scan-Button
   scanBtn.addEventListener('click', async () => {
-    if (!preprocessFrame(video, canvas)) return;
+    log.info('main', 'Scan ausgelöst');
+    if (!preprocessFrame(video, canvas)) {
+      log.warn('main', 'Scan abgebrochen – kein Video-Frame verfügbar');
+      return;
+    }
     scanBtn.disabled = true;
     scanBtn.textContent = 'Scannt…';
     setStatus('Scannt…', 'working');
@@ -112,6 +116,7 @@ async function main() {
     showLookupButton(false);
     setLookupModal('hidden');
     await scheduleRecognition(canvas, (text, confidence) => {
+      log.info('main', `OCR-Ergebnis: "${text || '–'}", Konfidenz=${confidence}%`);
       lastText       = text;
       lastConfidence = confidence;
       showResult(text, confidence);
@@ -132,6 +137,7 @@ async function main() {
   // Senden
   sendBtn.addEventListener('click', async () => {
     if (!lastText) return;
+    log.info('main', `Sende: ref="${lastText}", confidence=${Math.round(lastConfidence)}${productId ? `, id=${productId}` : ''}`);
     setSendState('sending');
     setStatus('Sende…', 'working');
     try {
@@ -191,8 +197,12 @@ if (new URLSearchParams(location.search).has('debug')) {
   const logEl    = document.getElementById('debug-log');
   const countEl  = document.getElementById('debug-count');
 
+  let debugFilter = 'ALL'; // 'ALL' | 'WARN' | 'ERROR'
+
   function renderLog() {
-    const entries = getLogs();
+    let entries = getLogs();
+    if (debugFilter === 'WARN')  entries = entries.filter(e => e.level === 'WARN' || e.level === 'ERROR');
+    if (debugFilter === 'ERROR') entries = entries.filter(e => e.level === 'ERROR');
     countEl.textContent = entries.length;
     logEl.innerHTML = entries.slice().reverse().map(e => `
       <div class="log-entry ${e.level}">
@@ -203,12 +213,23 @@ if (new URLSearchParams(location.search).has('debug')) {
       </div>`).join('');
   }
 
+  function setFilter(f) {
+    debugFilter = f;
+    document.getElementById('debug-filter-all').classList.toggle('dbf-active',   f === 'ALL');
+    document.getElementById('debug-filter-warn').classList.toggle('dbf-active',  f === 'WARN');
+    document.getElementById('debug-filter-error').classList.toggle('dbf-active', f === 'ERROR');
+    renderLog();
+  }
+
   overlay.classList.add('visible');
   renderLog();
 
-  // Re-render every 2s so new entries appear automatically
-  setInterval(renderLog, 2000);
+  // Re-render every 500ms so new entries appear quickly
+  setInterval(renderLog, 500);
 
+  document.getElementById('debug-filter-all').addEventListener('click',   () => setFilter('ALL'));
+  document.getElementById('debug-filter-warn').addEventListener('click',  () => setFilter('WARN'));
+  document.getElementById('debug-filter-error').addEventListener('click', () => setFilter('ERROR'));
   document.getElementById('debug-export').addEventListener('click', exportLogs);
   document.getElementById('debug-clear').addEventListener('click', () => { clearLogs(); renderLog(); });
   document.getElementById('debug-close').addEventListener('click', () => overlay.classList.remove('visible'));

@@ -73,7 +73,7 @@ Alle Ereignisse werden persistent in `localStorage` gespeichert (max. 300 Eintr�
 https://USERNAME.github.io/liveocr?debug
 ```
 
-Das Overlay zeigt alle Log-Einträge live (aktualisiert alle 2 s), farbcodiert nach Schwere:
+Das Overlay zeigt alle Log-Einträge live (aktualisiert alle 500 ms), farbcodiert nach Schwere:
 
 | Farbe | Level | Bedeutung |
 |---|---|---|
@@ -82,6 +82,7 @@ Das Overlay zeigt alle Log-Einträge live (aktualisiert alle 2 s), farbcodiert n
 | Rot | ERROR | Fehler (Kamerafehler, OCR-Fehler, HTTP-Fehler, Apps Script Fehler) |
 
 **Buttons im Overlay:**
+- **ALL** / **WARN+** / **ERROR** – filtert nach Log-Level (ALL zeigt alles, WARN+ nur Warnungen und Fehler, ERROR nur Fehler)
 - **Export JSON** – lädt eine `.json`-Datei mit dem vollständigen Log herunter (per WhatsApp/Mail weiterschicken)
 - **Leeren** – löscht den Log-Speicher
 - **✕** – schließt das Overlay (Log bleibt erhalten)
@@ -110,10 +111,12 @@ Fehler auf der Google-Seite sind in Apps Script sichtbar:
 
 | Quelle | Ereignisse |
 |---|---|
-| `main` | App-Start, Kamera OK/Fehler, OCR-Engine OK/Fehler, Senden OK/Fehler, Netzwerkwechsel |
+| `main` | App-Start, Scan ausgelöst/abgebrochen, OCR-Ergebnis, Send-Payload, Netzwerkwechsel |
+| `camera` | Stream-Auflösung, FacingMode, Track-Label; Tap-to-Focus-Trigger |
 | `canvas` | Scan-Zone-Größe beim ersten Frame (einmalig) |
-| `ocr` | Gemini-Modus aktiv, Verbindungstest, erkannter Text, kein REF gefunden, API-Fehler |
-| `send` | POST gesendet, HTTP-Fehler, Apps Script Fehlerantworten, Queue enqueue/flush |
+| `ocr` | Gemini-Modus aktiv, Verbindungstest (HTTP-Status), Bild-Kodierzeit, Netzwerkzeit, erkannter Text, kein REF, API-Fehler |
+| `send` | Online-Status + Payload-Zusammenfassung, HTTP-Antwort-Status, Apps Script Fehlerantworten, Queue enqueue/flush |
+| `prices` | checkRef-Status, lookupProduct Vorschlag ja/nein, addProduct Aufruf + Erfolg, Lieferantenanzahl |
 | Apps Script | Jeder Request mit Payload, Schreibergebnis (Zeile + ID), alle Fehler |
 
 ---

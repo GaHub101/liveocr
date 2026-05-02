@@ -19,6 +19,8 @@ export async function sendOrQueue(payload, onQueueChange) {
     throw new Error('VITE_APPS_SCRIPT_URL nicht konfiguriert. Siehe README.');
   }
 
+  log.info('send', `sendOrQueue: online=${navigator.onLine}, ref="${payload.ref}", confidence=${payload.confidence ?? '–'}${payload.id ? `, id=${payload.id}` : ''}`);
+
   if (navigator.onLine) {
     await flushQueue(onQueueChange);
     const result = await postToSheet(payload);
@@ -64,6 +66,8 @@ async function postToSheet(payload) {
     method: 'POST',
     body: JSON.stringify({ ...payload, secret: WEBHOOK_SECRET }),
   });
+
+  log.info('send', `POST-Antwort: HTTP ${resp.status} ${resp.statusText}`);
 
   if (!resp.ok) {
     const err = new Error(`HTTP ${resp.status}`);
