@@ -8,14 +8,16 @@ import {
   showResult, setSendState, updateQueueBadge,
   showProductBanner, showSupplierLinks,
   showLookupButton, setLookupModal, getLookupFormValues,
+  showReorderButton, setReorderState,
 } from './ui.js';
-import { checkRef, lookupProduct, addProduct, getProductSuppliers } from './prices.js';
+import { checkRef, lookupProduct, addProduct, getProductSuppliers, markReorder } from './prices.js';
 
 const video   = document.getElementById('video');
 const canvas  = document.getElementById('canvas');
 const scanBtn        = document.getElementById('scan-btn');
 const sendBtn        = document.getElementById('send-btn');
 const lookupBtn      = document.getElementById('lookup-btn');
+const reorderBtn     = document.getElementById('reorder-btn');
 const lookupConfirm  = document.getElementById('lookup-confirm-btn');
 const lookupCancel   = document.getElementById('lookup-cancel-btn');
 
@@ -25,9 +27,36 @@ const productId   = params.get('id');    // numerische ID aus dem Sheet – Pfli
 const productName = params.get('name');  // Artikelname, nur für Anzeige
 const mode        = params.get('mode');  // 'search' für späteren Such-Modus
 
-let lastText       = '';
-let lastConfidence = 0;
-let cachedSuppliers = [];
+let lastText            = '';
+let lastConfidence      = 0;
+let cachedSuppliers     = [];
+let lastFoundProductId  = null;  // Standalone-Modus: ID der zuletzt im Sheet gefundenen REF
+
+async function handleStandaloneScan(text, confidence) {
+  // OCR_Results-Logging: bei jedem erfolgreichen Scan, unabhängig vom Treffer-Status
+  sendOrQueue(
+    {
+      ref: text,
+      confidence: Math.round(confidence),
+      timestamp: new Date().toISOString(),
+    },
+    updateQueueBadge,
+  ).catch((err) => log.warn('main', `Auto-Log fehlgeschlagen: ${err.message}`));
+
+  const result = await checkRef(text);
+  if (result.status === 'ok') {
+    lastFoundProductId = result.id;
+    const suppliers = await getProductSuppliers(result.id);
+    showSupplierLinks(suppliers, text);   // Option 1.1
+    showReorderButton(true);              // Option 1.2
+    showLookupButton(false);
+  } else {
+    lastFoundProductId = null;
+    showSupplierLinks([], text);
+    showReorderButton(false);
+    showLookupButton(result.status === 'not_found');  // Option 2.1
+  }
+}
 
 async function main() {
   // Search-Modus: Schnittstelle vorbereitet, noch nicht aktiv
@@ -73,6 +102,9 @@ async function main() {
 
   // Standalone-Modus: Modal-Handler registrieren
   if (!productId) {
+    // "REF-Nr. hinzufügen" entfällt im Standalone-Modus – OCR_Results wird automatisch geloggt
+    sendBtn.style.display = 'none';
+
     lookupBtn.addEventListener('click', async () => {
       if (!lastText) return;
       lookupBtn.disabled = true;
@@ -99,6 +131,21 @@ async function main() {
       lookupConfirm.disabled = false;
       lookupConfirm.textContent = 'Bestätigen';
     });
+
+    reorderBtn.addEventListener('click', async () => {
+      if (!lastFoundProductId) return;
+      log.info('main', `Nachbestellen: id=${lastFoundProductId}, ref="${lastText}"`);
+      setReorderState('sending');
+      setStatus('Speichern…', 'working');
+      const result = await markReorder(lastFoundProductId);
+      if (result?.status === 'ok') {
+        setReorderState('sent');
+        setStatus('Nachbestellen ✓', 'ready');
+      } else {
+        setReorderState('error');
+        setStatus(`Fehler: ${result?.message || 'Speichern fehlgeschlagen'}`, 'error');
+      }
+    });
   }
 
   // Scan-Button
@@ -114,6 +161,9 @@ async function main() {
     // Panels zurücksetzen vor neuem Scan
     showSupplierLinks([], '');
     showLookupButton(false);
+    showReorderButton(false);
+    setReorderState('idle');
+    lastFoundProductId = null;
     setLookupModal('hidden');
     await scheduleRecognition(canvas, (text, confidence) => {
       log.info('main', `OCR-Ergebnis: "${text || '–'}", Konfidenz=${confidence}%`);
@@ -125,7 +175,7 @@ async function main() {
         if (productId) {
           showSupplierLinks(cachedSuppliers, text);
         } else {
-          checkRef(text).then(result => showLookupButton(result.status === 'not_found'));
+          handleStandaloneScan(text, confidence);
         }
       }
     });

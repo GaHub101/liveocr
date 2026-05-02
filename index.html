@@ -244,6 +244,31 @@
 
     #lookup-btn:not(:disabled):active { background: #047857; }
 
+    #reorder-btn {
+      width: 100%;
+      padding: 16px;
+      background: #b45309;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #reorder-btn:not(:disabled):active { background: #92400e; }
+    #reorder-btn:disabled { opacity: 0.6; cursor: default; }
+
+    .avail-row--primary {
+      background: rgba(245, 158, 11, 0.10);
+      border-left: 3px solid #f59e0b;
+      padding-left: 8px;
+    }
+    .avail-row--primary .avail-name { color: #fde68a; font-weight: 600; }
+    .avail-row--primary .avail-name::before { content: '★ '; color: #f59e0b; }
+
     #lookup-backdrop {
       position: fixed;
       inset: 0;
@@ -482,6 +507,7 @@
 
     <button id="scan-btn">Scannen</button>
     <button id="send-btn" disabled>REF-Nr. hinzufügen</button>
+    <button id="reorder-btn" style="display:none">Nachbestellen</button>
     <button id="lookup-btn" style="display:none">Neues Produkt anlegen</button>
     <div id="queue-info"></div>
     <div id="avail-panel" style="display:none">

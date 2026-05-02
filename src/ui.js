@@ -85,6 +85,7 @@ export function showSupplierLinks(suppliers, ref) {
   suppliers.forEach(s => {
     const row = document.createElement('div');
     row.className = 'avail-row';
+    if (s.primary) row.classList.add('avail-row--primary');
 
     const name = document.createElement('span');
     name.className   = 'avail-name';
@@ -107,6 +108,28 @@ export function showSupplierLinks(suppliers, ref) {
 
 export function showLookupButton(show) {
   document.getElementById('lookup-btn').style.display = show ? 'block' : 'none';
+}
+
+export function showReorderButton(show) {
+  document.getElementById('reorder-btn').style.display = show ? 'block' : 'none';
+}
+
+export function setReorderState(state) {
+  const btn = document.getElementById('reorder-btn');
+  if (!btn) return;
+  if (state === 'idle') {
+    btn.disabled = false;
+    btn.textContent = 'Nachbestellen';
+  } else if (state === 'sending') {
+    btn.disabled = true;
+    btn.textContent = 'Speichern…';
+  } else if (state === 'sent') {
+    btn.disabled = true;
+    btn.textContent = 'Nachbestellen ✓';
+  } else if (state === 'error') {
+    btn.disabled = false;
+    btn.textContent = 'Fehler – Erneut versuchen';
+  }
 }
 
 export function setLookupModal(state, ref, suggestion) {

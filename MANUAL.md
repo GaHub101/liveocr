@@ -23,14 +23,18 @@ Eine Web-App, die auf Android-Geräten läuft, per Kamera Herstellerreferenzen v
 10. AppSheet liest das Sheet und zeigt die REF-Nummer sofort beim Produkt an
 11. Nach dem Scan erscheinen außerdem **„Öffnen →"-Links** zu allen Lieferanten, die für dieses Produkt eingetragen sind
 
-**Szenario B: Du scannst ein neues, noch nicht erfasstes Produkt im Standalone-Modus.**
+**Szenario B: Standalone-Modus – drei Optionen je nach Treffer-Status.**
 
 1. Du öffnest die App direkt unter `https://deinname.github.io/liveocr` (ohne `?id=`)
-2. Du scannst das Etikett
-3. Falls die erkannte REF noch nicht im Sheet vorhanden ist, erscheint der Button **„Neues Produkt anlegen"**
-4. Du tippst darauf – die App fragt Gemini nach Artikelname, Hersteller und Kategorie (Vorschlag)
-5. Ein Formular öffnet sich, vorausgefüllt mit dem Gemini-Vorschlag – du ergänzt/korrigierst und trägst Lieferanten ein
-6. Nach Bestätigung wird eine neue Zeile in „Bestellungen" angelegt
+2. Du scannst das Etikett – Gemini erkennt die REF-Nummer; jeder Scan wird automatisch im Sheet `OCR_Results` protokolliert
+3. Die App gleicht die REF mit Spalte F (`REF-Nummer`) im Sheet `Bestellungen` ab und zeigt je nach Ergebnis eine von zwei Pfaden an:
+
+   **REF bereits vorhanden** – zwei Optionen:
+   - **Option 1.1 – Webshop öffnen:** Unter dem Ergebnis erscheinen alle Lieferanten des Produkts als „Öffnen →"-Links (Hauptlieferant mit Stern hervorgehoben). Ein Tipp öffnet die Such-URL des Lieferanten mit angehängter REF-Nummer in einem neuen Tab.
+   - **Option 1.2 – Nachbestellen:** Tippe den Button **„Nachbestellen"** – die App schreibt `Nachbestellen` in Spalte I (`Bestellstatus`) der entsprechenden Zeile.
+
+   **REF noch nicht vorhanden** – eine Option:
+   - **Option 2.1 – Neues Produkt anlegen:** Es erscheint der grüne Button **„Neues Produkt anlegen"**. Tipp drauf → die App fragt Gemini nach Artikelname, Hersteller und Kategorie. Ein Formular öffnet sich, vorausgefüllt mit dem Gemini-Vorschlag. Nach Bestätigung wird eine neue Zeile in `Bestellungen` angelegt.
 
 ---
 
@@ -172,34 +176,40 @@ Der Name muss exakt mit dem entsprechenden Eintrag im „Lieferanten"-Tab übere
 
 ---
 
-### Neues Produkt anlegen (Standalone-Modus)
+### Standalone-Modus (drei Optionen)
 
 Du kannst den Scanner auch direkt unter `https://USERNAME.github.io/liveocr` öffnen – ohne `?id=` Parameter.
 
 1. Tippe auf **„Scannen"** und halte ein Etikett in den blauen Rahmen
-2. Nach der Erkennung prüft die App automatisch, ob die REF bereits im Sheet vorhanden ist
-3. **REF bereits erfasst:** Kein Button erscheint – du kannst trotzdem auf „REF-Nr. hinzufügen" tippen, um den Scan im Log (OCR_Results) zu speichern
-4. **REF neu:** Es erscheint der grüne Button **„Neues Produkt anlegen"**
-5. Tippe darauf – Gemini wird nach Produktdetails für diese REF befragt (dauert ca. 1–2 Sekunden)
-6. Ein Formular öffnet sich, Artikelname, Hersteller und Kategorie sind wenn möglich vorausgefüllt
-7. Ergänze die fehlenden Felder:
-   - **Artikelname** *(Pflicht)*
-   - Hersteller, Kategorie
-   - Hauptlieferant, Alt. Lieferant 1–4 (Namen exakt wie im „Lieferanten"-Tab eintragen)
-   - Artikelcode, Lagerort
-8. Tippe auf **„Bestätigen"** – eine neue Zeile wird in „Bestellungen" angelegt
+2. Jeder erkannte Scan wird automatisch im Sheet `OCR_Results` protokolliert (Timestamp, REF, Konfidenz)
+3. Die App gleicht die REF mit Spalte F im Sheet `Bestellungen` ab und zeigt eine der beiden Varianten:
+
+   **REF bereits vorhanden** – zwei Optionen:
+   - **„Öffnen →"-Links** zu allen Lieferanten des Produkts; der Hauptlieferant ist mit einem Stern (★) und gelber Markierung hervorgehoben. Tipp öffnet die Such-URL des Lieferanten mit angehängter REF-Nummer in einem neuen Tab.
+   - Button **„Nachbestellen"** – schreibt `Nachbestellen` in Spalte I (`Bestellstatus`) der entsprechenden Zeile. Bestätigung erscheint als grüner Status (`Nachbestellen ✓`).
+
+   **REF noch nicht vorhanden** – eine Option:
+   - Es erscheint der grüne Button **„Neues Produkt anlegen"**
+   - Tipp → Gemini wird nach Produktdetails befragt (dauert ca. 1–2 Sekunden)
+   - Ein Formular öffnet sich, Artikelname, Hersteller und Kategorie sind wenn möglich vorausgefüllt
+   - Ergänze die fehlenden Felder:
+     - **Artikelname** *(Pflicht)*
+     - Hersteller, Kategorie
+     - Hauptlieferant, Alt. Lieferant 1–4 (Namen exakt wie im „Lieferanten"-Tab eintragen)
+     - Artikelcode, Lagerort
+   - Tipp auf **„Bestätigen"** – eine neue Zeile wird in `Bestellungen` angelegt (Spalte I bekommt automatisch `Nachbestellen`)
 
 ---
 
 ### Offline-Betrieb
 
-Der **„REF-Nr. hinzufügen"**-Button funktioniert auch ohne Netzwerkverbindung (z.B. in einem Lager mit schlechtem WLAN):
+Im AppSheet-Modus (`?id=`) funktioniert der **„REF-Nr. hinzufügen"**-Button auch ohne Netzwerk; im Standalone-Modus werden OCR-Logs offline gepuffert:
 
-- Tippst du auf „REF-Nr. hinzufügen" während du offline bist, wird der Eintrag lokal auf dem Gerät gespeichert und du bekommst die Meldung **„In Warteschlange"**
+- Schreiboperationen (REF hinzufügen / OCR-Log) werden bei fehlendem Netz lokal gespeichert; du bekommst die Meldung **„In Warteschlange"**
 - Sobald das Gerät wieder online ist, werden alle gepufferten Einträge **automatisch** in der richtigen Reihenfolge gesendet
-- Die Anzahl der wartenden Einträge wird unter dem Sende-Button angezeigt
+- Die Anzahl der wartenden Einträge wird unter den Buttons angezeigt
 
-> **Hinweis:** „Neues Produkt anlegen" erfordert eine aktive Internetverbindung (Gemini-Aufruf + Sheet-Zugriff).
+> **Hinweis:** „Nachbestellen" und „Neues Produkt anlegen" erfordern eine aktive Internetverbindung (Sheet-Zugriff bzw. Gemini-Aufruf).
 
 ---
 

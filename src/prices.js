@@ -22,6 +22,17 @@ export async function checkRef(ref) {
   }
 }
 
+export async function markReorder(id) {
+  try {
+    const data = await post({ action: 'markReorder', id });
+    log.info('prices', `markReorder: id=${id} → status=${data.status}`);
+    return data;
+  } catch (err) {
+    log.warn('prices', `markReorder fehlgeschlagen: id=${id} – ${err.message}`);
+    return { status: 'error', message: err.message };
+  }
+}
+
 export async function lookupProduct(ref) {
   try {
     const data = await post({ action: 'lookupProduct', ref });

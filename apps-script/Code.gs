@@ -21,6 +21,7 @@ var LOG_SHEET                = 'OCR_Results';
 var USAGE_LOG_SHEET          = 'Nutzungslog';
 var SUPPLIERS_SHEET          = 'Lieferanten';
 var REF_COL                  = 6;   // Spalte F (1-based)
+var STATUS_COL               = 9;   // Spalte I, Bestellstatus (1-based)
 var ID_COL_INDEX             = 0;   // Spalte A (0-based)
 var HAUPTLIEFERANT_COL_IDX   = 4;   // Spalte E (0-based)
 var ALT_LIEFERANT_COL_IDXS   = [13, 14, 15, 16];  // Spalten N–Q (0-based)
@@ -86,6 +87,10 @@ function doPost(e) {
 
     if (payload.action === 'getProductSuppliers') {
       return handleGetProductSuppliers(payload);
+    }
+
+    if (payload.action === 'markReorder') {
+      return handleMarkReorder(payload);
     }
 
     if (payload.id) {
@@ -504,7 +509,7 @@ function handleGetProductSuppliers(payload) {
     for (var c = 0; c < colIdxs.length; c++) {
       var name = String(bData[r][colIdxs[c]] || '').trim();
       if (name && urlMap[name]) {
-        suppliers.push({ name: name, baseUrl: urlMap[name] });
+        suppliers.push({ name: name, baseUrl: urlMap[name], primary: c === 0 });
       }
     }
 
@@ -514,6 +519,46 @@ function handleGetProductSuppliers(payload) {
 
   logUsage('getProductSuppliers', 'not_found', 'id=' + id);
   return jsonResponse({ status: 'not_found', suppliers: [] });
+}
+
+// ---------------------------------------------------------------------------
+// Bestellstatus auf "Nachbestellen" setzen (Standalone-Modus, REF gefunden)
+// ---------------------------------------------------------------------------
+
+function handleMarkReorder(payload) {
+  var id = String(payload.id || '').trim();
+  if (!id) {
+    logUsage('markReorder', 'error', 'id fehlt');
+    return jsonResponse({ status: 'error', message: 'id fehlt' });
+  }
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(BESTELLUNGEN_SHEET);
+  if (!sheet) {
+    logUsage('markReorder', 'error', 'Sheet nicht gefunden');
+    return jsonResponse({ status: 'error', message: 'Sheet "' + BESTELLUNGEN_SHEET + '" nicht gefunden' });
+  }
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (lockErr) {
+    logUsage('markReorder', 'error', 'Lock-Timeout – id=' + id);
+    return jsonResponse({ status: 'error', message: 'Server überlastet – bitte erneut versuchen' });
+  }
+
+  try {
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][ID_COL_INDEX]) === id) {
+        sheet.getRange(i + 1, STATUS_COL).setValue('Nachbestellen');
+        Logger.log('markReorder: id=' + id + ' row=' + (i + 1));
+        logUsage('markReorder', 'ok', 'id=' + id);
+        return jsonResponse({ status: 'ok', row: i + 1, id: id });
+      }
+    }
+    logUsage('markReorder', 'not_found', 'id=' + id);
+    return jsonResponse({ status: 'not_found', message: 'ID ' + id + ' nicht gefunden' });
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ---------------------------------------------------------------------------
