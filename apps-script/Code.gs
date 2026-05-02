@@ -44,6 +44,10 @@ function doPost(e) {
       return jsonResponse({ status: 'error', message: 'Unauthorized' });
     }
 
+    if (checkRateLimit()) {
+      return jsonResponse({ status: 'error', message: 'Rate limit exceeded. Try again in a minute.' });
+    }
+
     Logger.log('doPost: payload action=' + (payload.action || 'none') + ' id=' + (payload.id || ''));
 
     if (payload.action === 'ocr') {
@@ -64,6 +68,40 @@ function doPost(e) {
 
 function doGet() {
   return jsonResponse({ status: 'ok', message: 'Live OCR Webhook aktiv' });
+}
+
+// ---------------------------------------------------------------------------
+// Rate Limiting
+// ---------------------------------------------------------------------------
+
+function checkRateLimit() {
+  var props = PropertiesService.getScriptProperties();
+  var limit = parseInt(props.getProperty('RATE_LIMIT_PER_MINUTE') || '30');
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(2000);
+  } catch (e) {
+    // Lock-Timeout bei hoher Last – fail open damit legitime Requests nicht blockiert werden
+    Logger.log('checkRateLimit: Lock-Timeout – Request durchgelassen');
+    return false;
+  }
+
+  try {
+    var nowMinute = Math.floor(Date.now() / 60000);
+    var storedMinute = parseInt(props.getProperty('rl_minute') || '0');
+    var count = (storedMinute === nowMinute) ? parseInt(props.getProperty('rl_count') || '0') : 0;
+
+    if (count >= limit) {
+      Logger.log('checkRateLimit: Limit ' + limit + '/min überschritten (aktuell: ' + count + ')');
+      return true;
+    }
+
+    props.setProperties({ rl_minute: String(nowMinute), rl_count: String(count + 1) });
+    return false;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ---------------------------------------------------------------------------

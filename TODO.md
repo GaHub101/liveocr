@@ -17,19 +17,13 @@ Die App erkennt gedruckten Text per OCR (Gemini). Barcodes und QR-Codes werden n
 
 ---
 
-### Rate Limiting im Apps Script Webhook
-Der Webhook ist durch ein Shared Secret geschützt, hat aber kein serverseitiges Rate Limiting. Bei Missbrauch (Secret aus kompiliertem JS extrahiert) könnte die Gemini-Quota erschöpft werden.
-
-**Mögliche Umsetzung:** PropertiesService-basierter Counter pro Minute – bei Überschreitung 429-Antwort zurückgeben.
-
----
-
 ## Erledigt
 
 - [x] Tesseract durch Gemini 2.5 Flash ersetzt
 - [x] Gemini-Payload optimiert (50 % Downscale, JPEG q0.7, ~−75 % Größe)
 - [x] Prompt serverseitig hardkodiert (nicht mehr vom Client gesendet)
 - [x] Shared Secret zum Schutz des Webhooks eingeführt
+- [x] Rate Limiting im Apps Script Webhook (LockService + PropertiesService, Standard: 30/min)
 - [x] CI/CD via GitHub Actions auf GitHub Pages
 - [x] Offline-Queue mit Auto-Flush bei Reconnect
 - [x] Debug-Overlay (`?debug`) mit Log-Export
