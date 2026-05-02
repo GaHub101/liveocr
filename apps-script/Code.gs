@@ -22,6 +22,7 @@
 
 var BESTELLUNGEN_SHEET = 'Bestellungen';
 var LOG_SHEET          = 'OCR_Results';
+var USAGE_LOG_SHEET    = 'Nutzungslog';
 var REF_COL            = 5; // Spalte E (1-based)
 var ID_COL_INDEX       = 0; // Spalte A (0-based für Array-Zugriff)
 
@@ -46,6 +47,11 @@ function doPost(e) {
 
     Logger.log('doPost: payload action=' + (payload.action || 'none') + ' id=' + (payload.id || ''));
 
+    if (payload.action === 'ping') {
+      logUsage('ping', 'ok', '');
+      return jsonResponse({ status: 'ok' });
+    }
+
     if (payload.action === 'ocr') {
       return handleGeminiOcr(payload.image);
     }
@@ -67,18 +73,39 @@ function doGet() {
 }
 
 // ---------------------------------------------------------------------------
+// Nutzungslog
+// ---------------------------------------------------------------------------
+
+function logUsage(action, status, details) {
+  try {
+    var ss    = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(USAGE_LOG_SHEET);
+    if (!sheet) {
+      sheet = ss.insertSheet(USAGE_LOG_SHEET);
+      sheet.appendRow(['Timestamp', 'Aktion', 'Status', 'Details']);
+      sheet.setFrozenRows(1);
+    }
+    sheet.appendRow([new Date().toISOString(), action, status, details || '']);
+  } catch (err) {
+    Logger.log('logUsage ERROR: ' + err.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Write-Modus
 // ---------------------------------------------------------------------------
 
 function writeRef(payload) {
   if (!payload.ref || String(payload.ref).trim() === '') {
     Logger.log('writeRef: ref fehlt oder leer für id=' + payload.id);
+    logUsage('writeRef', 'error', 'ref fehlt – id=' + payload.id);
     return jsonResponse({ status: 'error', message: 'ref fehlt oder leer – nichts geschrieben' });
   }
 
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(BESTELLUNGEN_SHEET);
   if (!sheet) {
     Logger.log('writeRef: Sheet "' + BESTELLUNGEN_SHEET + '" nicht gefunden');
+    logUsage('writeRef', 'error', 'Sheet nicht gefunden');
     return jsonResponse({ status: 'error', message: 'Sheet "' + BESTELLUNGEN_SHEET + '" nicht gefunden' });
   }
 
@@ -88,11 +115,13 @@ function writeRef(payload) {
       var ref = String(payload.ref).trim();
       sheet.getRange(i + 1, REF_COL).setValue(ref);
       Logger.log('writeRef: OK – id=' + payload.id + ' row=' + (i + 1) + ' ref=' + ref);
+      logUsage('writeRef', 'ok', 'id=' + payload.id + ' ref=' + ref);
       return jsonResponse({ status: 'ok', row: i + 1, id: payload.id });
     }
   }
 
   Logger.log('writeRef: ID nicht gefunden – id=' + payload.id);
+  logUsage('writeRef', 'error', 'ID nicht gefunden – id=' + payload.id);
   return jsonResponse({ status: 'error', message: 'ID ' + payload.id + ' nicht gefunden' });
 }
 
@@ -118,6 +147,7 @@ function appendLog(payload) {
   ]);
 
   Logger.log('appendLog: ref=' + (payload.ref || '(leer)') + ' confidence=' + payload.confidence);
+  logUsage('send', 'ok', 'ref=' + (payload.ref || '(leer)') + ' confidence=' + (payload.confidence != null ? payload.confidence : ''));
   return jsonResponse({ status: 'ok' });
 }
 
@@ -146,6 +176,7 @@ function handleGeminiOcr(base64Image) {
   var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) {
     Logger.log('handleGeminiOcr: GEMINI_API_KEY fehlt in Script Properties');
+    logUsage('ocr', 'error', 'GEMINI_API_KEY nicht konfiguriert');
     return jsonResponse({ status: 'error', message: 'GEMINI_API_KEY nicht konfiguriert' });
   }
 
@@ -174,11 +205,13 @@ function handleGeminiOcr(base64Image) {
   if (result.error) {
     var errMsg = result.error.code + ': ' + result.error.message;
     Logger.log('handleGeminiOcr: Gemini API Fehler – ' + errMsg);
+    logUsage('ocr', 'error', errMsg);
     return jsonResponse({ status: 'error', message: errMsg, raw: '' });
   }
 
   if (!result.candidates || !result.candidates[0] || !result.candidates[0].content) {
     Logger.log('handleGeminiOcr: keine Candidates – ' + responseText.substring(0, 300));
+    logUsage('ocr', 'error', 'Keine Candidates von Gemini');
     return jsonResponse({ status: 'error', message: 'Keine Antwort von Gemini', raw: responseText.substring(0, 200) });
   }
 
@@ -188,6 +221,7 @@ function handleGeminiOcr(base64Image) {
   var raw = textParts.length > 0 ? textParts[textParts.length - 1].text.trim() : '';
   var ref = (raw === 'NONE' || raw === '') ? '' : raw;
   Logger.log('handleGeminiOcr: raw="' + raw + '" ref=' + (ref || '(leer)'));
+  logUsage('ocr', ref ? 'ok' : 'not_found', ref ? 'ref=' + ref : 'kein REF erkannt');
   return jsonResponse({ status: ref ? 'ok' : 'not_found', ref: ref, raw: raw.substring(0, 200) });
 }
 
