@@ -23,6 +23,7 @@
 var BESTELLUNGEN_SHEET = 'Bestellungen';
 var LOG_SHEET          = 'OCR_Results';
 var USAGE_LOG_SHEET    = 'Nutzungslog';
+var SUPPLIERS_SHEET    = 'Lieferanten';
 var REF_COL            = 5;  // Spalte E (1-based)
 var ID_COL_INDEX       = 0;  // Spalte A (0-based für Array-Zugriff)
 
@@ -75,6 +76,10 @@ function doPost(e) {
 
     if (payload.action === 'search') {
       return searchByRef(payload.ref);
+    }
+
+    if (payload.action === 'checkAvailability') {
+      return handleCheckAvailability(payload);
     }
 
     if (payload.id) {
@@ -359,6 +364,62 @@ function handleGeminiOcr(base64Image, mimeType) {
   Logger.log('handleGeminiOcr: raw="' + raw + '" ref=' + (ref || '(leer)'));
   logUsage('ocr', ref ? 'ok' : 'not_found', ref ? 'ref=' + ref : 'kein REF erkannt');
   return jsonResponse({ status: ref ? 'ok' : 'not_found', ref: ref, raw: raw.substring(0, 200) });
+}
+
+// ---------------------------------------------------------------------------
+// Lieferanten-Verfügbarkeitscheck
+// ---------------------------------------------------------------------------
+
+function handleCheckAvailability(payload) {
+  var ref = String(payload.ref || '').trim();
+  if (!ref || !REF_PATTERN.test(ref)) {
+    return jsonResponse({ status: 'error', message: 'Ungültige REF' });
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SUPPLIERS_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(SUPPLIERS_SHEET);
+    sheet.appendRow(['Name', 'Such-URL', 'Aktiv']);
+    sheet.setFrozenRows(1);
+    logUsage('checkAvailability', 'ok', 'Lieferanten-Tab neu angelegt');
+    return jsonResponse({ status: 'ok', results: [] });
+  }
+
+  var data = sheet.getDataRange().getValues();
+  var results = [];
+
+  for (var i = 1; i < data.length; i++) {
+    var name    = String(data[i][0]).trim();
+    var baseUrl = String(data[i][1]).trim();
+    var active  = String(data[i][2]).trim().toUpperCase();
+
+    if (!name || !baseUrl || active === 'FALSE') continue;
+
+    var searchUrl = baseUrl + encodeURIComponent(ref);
+    var availability = 'unknown';
+
+    try {
+      var resp = UrlFetchApp.fetch(searchUrl, {
+        method: 'GET',
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GoogleAppsScript)' },
+        followRedirects: true,
+        muteHttpExceptions: true
+      });
+      var code = resp.getResponseCode();
+      if (code === 200) {
+        var html = resp.getContentText();
+        availability = (html.indexOf(ref) !== -1) ? 'found' : 'not_found';
+      }
+    } catch (fetchErr) {
+      Logger.log('checkAvailability: UrlFetch error for ' + name + ': ' + fetchErr.message);
+    }
+
+    results.push({ name: name, url: searchUrl, availability: availability });
+  }
+
+  logUsage('checkAvailability', 'ok', 'ref=' + ref + ' count=' + results.length);
+  return jsonResponse({ status: 'ok', results: results });
 }
 
 // ---------------------------------------------------------------------------

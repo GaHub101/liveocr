@@ -70,6 +70,61 @@ export function hideProductBanner() {
   productBanner.classList.remove('visible');
 }
 
+export function showAvailability(results) {
+  const panel = document.getElementById('avail-panel');
+  const list  = document.getElementById('avail-list');
+  if (!panel || !list) return;
+
+  list.innerHTML = '';
+
+  if (!results || results.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  results.forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'avail-row';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'avail-name';
+    nameEl.textContent = r.name;
+    row.appendChild(nameEl);
+
+    if (r.availability === 'not_found') {
+      const span = document.createElement('span');
+      span.className = 'avail-none';
+      span.textContent = 'Nicht verfügbar';
+      row.appendChild(span);
+    } else {
+      const a = document.createElement('a');
+      a.href = r.url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      if (r.availability === 'unknown') {
+        a.className = 'avail-link unknown';
+        a.textContent = 'Öffnen (nicht geprüft)';
+      } else {
+        a.className = 'avail-link';
+        a.textContent = 'Im Browser öffnen →';
+      }
+      row.appendChild(a);
+    }
+
+    list.appendChild(row);
+  });
+
+  panel.style.display = 'block';
+}
+
+export function showAvailabilityLoading() {
+  const panel = document.getElementById('avail-panel');
+  const list  = document.getElementById('avail-list');
+  if (!panel || !list) return;
+  list.innerHTML = '<div class="avail-loading">Verfügbarkeit wird geprüft…</div>';
+  panel.style.display = 'block';
+}
+
 export function updateQueueBadge(count) {
   if (count > 0) {
     queueInfo.textContent = `${count} Einträge offline in Warteschlange – werden gesendet sobald Netzwerk verfügbar`;

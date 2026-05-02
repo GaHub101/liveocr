@@ -221,6 +221,42 @@
 
     #queue-info.visible { display: block; }
 
+    #avail-panel {
+      margin-top: 12px;
+      border-top: 1px solid #334155;
+      padding-top: 10px;
+      width: 100%;
+    }
+
+    .avail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 0;
+      border-bottom: 1px solid #1e293b;
+      font-size: 14px;
+    }
+
+    .avail-row:last-child { border-bottom: none; }
+
+    .avail-name { font-weight: 500; color: #f1f5f9; }
+
+    .avail-link {
+      font-size: 13px;
+      color: #3b82f6;
+      text-decoration: none;
+      padding: 4px 10px;
+      border: 1px solid #3b82f6;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    .avail-link.unknown { color: #64748b; border-color: #475569; }
+
+    .avail-none { font-size: 13px; color: #64748b; font-style: italic; }
+
+    .avail-loading { font-size: 13px; color: #64748b; text-align: center; padding: 6px 0; }
+
     #loading-screen {
       position: fixed;
       inset: 0;
@@ -386,6 +422,9 @@
     <button id="scan-btn">Scannen</button>
     <button id="send-btn" disabled>REF-Nr. hinzufügen</button>
     <div id="queue-info"></div>
+    <div id="avail-panel" style="display:none">
+      <div id="avail-list"></div>
+    </div>
   </div>
 
   <div id="debug-overlay">

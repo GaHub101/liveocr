@@ -6,8 +6,9 @@ import { log, getLogs, clearLogs, exportLogs }      from './logger.js';
 import {
   setStatus, setLoadingMessage, hideLoading,
   showResult, setSendState, updateQueueBadge,
-  showProductBanner,
+  showProductBanner, showAvailability, showAvailabilityLoading,
 } from './ui.js';
+import { checkAvailability } from './prices.js';
 
 const video   = document.getElementById('video');
 const canvas  = document.getElementById('canvas');
@@ -70,11 +71,17 @@ async function main() {
     scanBtn.disabled = true;
     scanBtn.textContent = 'Scannt…';
     setStatus('Scannt…', 'working');
+    // Panel zurücksetzen vor neuem Scan
+    showAvailability([]);
     await scheduleRecognition(canvas, (text, confidence) => {
       lastText       = text;
       lastConfidence = confidence;
       showResult(text, confidence);
       setStatus('Erkannt', 'ready');
+      if (text) {
+        showAvailabilityLoading();
+        checkAvailability(text).then(({ results }) => showAvailability(results));
+      }
     });
     scanBtn.disabled = false;
     scanBtn.textContent = 'Scannen';
