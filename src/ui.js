@@ -161,8 +161,10 @@ export function setLookupModal(state, ref, suggestion) {
 export function applyLookupSuggestion(suggestion) {
   const s    = suggestion || {};
   const alts = Array.isArray(s.alt_lieferanten) ? s.alt_lieferanten : [];
-  if (s.artikelname) document.getElementById('lk-name').value = s.artikelname;
-  if (s.kategorie)   document.getElementById('lk-cat').value  = s.kategorie;
+  // Suchbegriff-Feld (lk-hersteller) wird mit dem von Gemini bestätigten offiziellen Hersteller überschrieben
+  if (s.hersteller)  document.getElementById('lk-hersteller').value = s.hersteller;
+  if (s.artikelname) document.getElementById('lk-name').value       = s.artikelname;
+  if (s.kategorie)   document.getElementById('lk-cat').value        = s.kategorie;
   // Hauptlieferant (lk-sup) bleibt leer — manuelle Auswahl im Sheet
   document.getElementById('lk-alt1').value = alts[0] || '';
   document.getElementById('lk-alt2').value = alts[1] || '';

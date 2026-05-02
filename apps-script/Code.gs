@@ -382,14 +382,53 @@ function handleGeminiOcr(base64Image, mimeType) {
 // ---------------------------------------------------------------------------
 
 function handleLookupProduct(payload) {
-  var ref        = String(payload.ref        || '').trim();
-  var hersteller = String(payload.hersteller || '').trim();
+  var ref         = String(payload.ref        || '').trim();
+  var suchbegriff = String(payload.hersteller || '').trim();  // Feld heisst im UI "Suchbegriff", JSON-Key bleibt "hersteller"
   if (!ref) return jsonResponse({ status: 'error', message: 'ref fehlt' });
 
   var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) return jsonResponse({ status: 'ok', suggestion: {} });
 
-  // Bekannte Lieferantennamen aus "Lieferanten"-Sheet einlesen
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
+  var suggestion = {};
+  var grounded   = false;
+
+  // ---------- Call 1: mit Google Search Grounding — Produkt identifizieren ----------
+  var prompt1 = 'Du bist Experte für medizinische/zahnmedizinische Produkte. '
+    + 'Suche im Web nach diesem Produkt: "' + suchbegriff + ' ' + ref + '". '
+    + 'Bestimme aus den Suchergebnissen: '
+    + 'hersteller (offizieller Firmenname), '
+    + 'artikelname (offizielle Produktbezeichnung des Herstellers für diese REF), '
+    + 'kategorie (z.B. Brackets, Bänder, Drähte, Instrumente, Verbrauchsmaterial). '
+    + 'Antworte NUR als JSON: {"hersteller":"","artikelname":"","kategorie":""}. '
+    + 'Unbekannte/unsichere Felder = leerer String. Keine Spekulation.';
+
+  var body1 = {
+    contents: [{ parts: [{ text: prompt1 }] }],
+    tools: [{ google_search: {} }],
+    generationConfig: { maxOutputTokens: 250, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
+  };
+
+  try {
+    var resp1   = UrlFetchApp.fetch(url, {
+      method: 'POST', contentType: 'application/json',
+      payload: JSON.stringify(body1), muteHttpExceptions: true
+    });
+    var result1 = JSON.parse(resp1.getContentText());
+    grounded = !!(result1.candidates && result1.candidates[0] && result1.candidates[0].groundingMetadata);
+    var rParts1 = (result1.candidates && result1.candidates[0] &&
+                   result1.candidates[0].content && result1.candidates[0].content.parts) || [];
+    var textParts1 = rParts1.filter(function(p) { return !p.thought && p.text; });
+    var raw1 = textParts1.length > 0 ? textParts1[textParts1.length - 1].text.trim() : '{}';
+    var jsonMatch1 = raw1.match(/\{[\s\S]*\}/);
+    if (jsonMatch1) suggestion = JSON.parse(jsonMatch1[0]);
+  } catch (err) {
+    Logger.log('handleLookupProduct CALL 1 ERROR: ' + err.message);
+    logUsage('lookupProduct', 'error', 'call1: ' + err.message);
+    return jsonResponse({ status: 'ok', suggestion: {} });
+  }
+
+  // ---------- Call 2: ohne Grounding — Lieferanten-Vorschlag aus bekannter Liste ----------
   var supplierNames = [];
   var ss     = SpreadsheetApp.getActiveSpreadsheet();
   var lSheet = ss.getSheetByName(SUPPLIERS_SHEET);
@@ -401,46 +440,49 @@ function handleLookupProduct(payload) {
     }
   }
 
-  var supplierHint = supplierNames.length > 0
-    ? ' Wähle in "alt_lieferanten" maximal 4 Lieferanten aus DIESER Liste (exakte Schreibweise), bei denen das Produkt typischerweise erhältlich ist: '
-      + supplierNames.join(', ') + '. Wenn keiner passt: leeres Array [].'
-    : '';
+  if (suggestion.kategorie && supplierNames.length > 0) {
+    var herstellerCtx = String(suggestion.hersteller || suchbegriff || '');
+    var prompt2 = 'Du bist Experte für medizinische/zahnmedizinische Produkte. '
+      + 'Produkt-Kategorie: "' + suggestion.kategorie + '". '
+      + 'Hersteller: "' + herstellerCtx + '". '
+      + 'Aus dieser Lieferanten-Liste, wähle maximal 4 Lieferanten (exakte Schreibweise), die typischerweise diese Produktkategorie führen. '
+      + 'Schätzung anhand des Sortiments-Schwerpunkts des Lieferanten ist erwünscht — keine Web-Recherche nötig. '
+      + 'Liste: ' + supplierNames.join(', ') + '. '
+      + 'Antworte NUR als JSON: {"alt_lieferanten":[]}. Wenn keiner passt: leeres Array.';
 
-  var prompt = 'Du bist Experte für medizinische/zahnmedizinische Produkte. '
-    + 'Hersteller: "' + hersteller + '", REF-Nummer: "' + ref + '". '
-    + 'Bestimme: Artikelname (offizielle Produktbezeichnung des Herstellers für diese REF), '
-    + 'Kategorie (z.B. Brackets, Bänder, Drähte, Instrumente, Verbrauchsmaterial).'
-    + supplierHint
-    + ' Antworte NUR als JSON: {"artikelname":"","kategorie":"","alt_lieferanten":[]}. '
-    + 'Unbekannte/unsichere Felder = leerer String bzw. leeres Array. Keine Spekulation.';
+    var body2 = {
+      contents: [{ parts: [{ text: prompt2 }] }],
+      generationConfig: { maxOutputTokens: 200, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
+    };
 
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
-  var body = {
-    contents: [{ parts: [{ text: prompt }] }],
-    tools: [{ google_search: {} }],
-    generationConfig: { maxOutputTokens: 250, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
-  };
-
-  try {
-    var resp   = UrlFetchApp.fetch(url, {
-      method: 'POST', contentType: 'application/json',
-      payload: JSON.stringify(body), muteHttpExceptions: true
-    });
-    var result = JSON.parse(resp.getContentText());
-    var rParts = (result.candidates && result.candidates[0] &&
-                  result.candidates[0].content && result.candidates[0].content.parts) || [];
-    var textParts = rParts.filter(function(p) { return !p.thought && p.text; });
-    var raw = textParts.length > 0 ? textParts[textParts.length - 1].text.trim() : '{}';
-    var jsonMatch = raw.match(/\{[\s\S]*\}/);
-    var suggestion = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
-    var grounded = !!(result.candidates && result.candidates[0] && result.candidates[0].groundingMetadata);
-    logUsage('lookupProduct', 'ok', 'ref=' + ref + ' hersteller=' + hersteller + ' grounded=' + grounded);
-    return jsonResponse({ status: 'ok', suggestion: suggestion });
-  } catch (err) {
-    Logger.log('handleLookupProduct ERROR: ' + err.message);
-    logUsage('lookupProduct', 'error', err.message);
-    return jsonResponse({ status: 'ok', suggestion: {} });
+    try {
+      var resp2   = UrlFetchApp.fetch(url, {
+        method: 'POST', contentType: 'application/json',
+        payload: JSON.stringify(body2), muteHttpExceptions: true
+      });
+      var result2 = JSON.parse(resp2.getContentText());
+      var rParts2 = (result2.candidates && result2.candidates[0] &&
+                     result2.candidates[0].content && result2.candidates[0].content.parts) || [];
+      var textParts2 = rParts2.filter(function(p) { return !p.thought && p.text; });
+      var raw2 = textParts2.length > 0 ? textParts2[textParts2.length - 1].text.trim() : '{}';
+      var jsonMatch2 = raw2.match(/\{[\s\S]*\}/);
+      if (jsonMatch2) {
+        var altResult = JSON.parse(jsonMatch2[0]);
+        suggestion.alt_lieferanten = Array.isArray(altResult.alt_lieferanten) ? altResult.alt_lieferanten : [];
+      }
+    } catch (err) {
+      Logger.log('handleLookupProduct CALL 2 ERROR: ' + err.message);
+      // Fallthrough — Vorschlag ohne Lieferanten zurückgeben
+    }
   }
+
+  if (!Array.isArray(suggestion.alt_lieferanten)) suggestion.alt_lieferanten = [];
+
+  logUsage('lookupProduct', 'ok',
+    'ref=' + ref + ' suchbegriff=' + suchbegriff
+    + ' grounded=' + grounded
+    + ' alts=' + suggestion.alt_lieferanten.length);
+  return jsonResponse({ status: 'ok', suggestion: suggestion });
 }
 
 // ---------------------------------------------------------------------------

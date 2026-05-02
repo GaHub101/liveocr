@@ -126,7 +126,7 @@ async function main() {
       setSuggestStatus('Lade Vorschlag…', 'loading');
       const suggestion = await lookupProduct(lastText, hersteller);
       applyLookupSuggestion(suggestion);
-      const filled = [suggestion.artikelname, suggestion.kategorie].filter(Boolean).length;
+      const filled = [suggestion.hersteller, suggestion.artikelname, suggestion.kategorie].filter(Boolean).length;
       const altsN  = Array.isArray(suggestion.alt_lieferanten) ? suggestion.alt_lieferanten.length : 0;
       setSuggestStatus(
         filled > 0 || altsN > 0
