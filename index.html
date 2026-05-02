@@ -408,6 +408,11 @@
       border-radius: 4px;
       cursor: pointer;
     }
+    #debug-toolbar button.dbf-active {
+      background: #334155;
+      border-color: #64748b;
+      color: #f1f5f9;
+    }
 
     #debug-log {
       overflow-y: auto;
@@ -511,6 +516,9 @@
   <div id="debug-overlay">
     <div id="debug-toolbar">
       <span>Debug-Log (<span id="debug-count">0</span> Einträge)</span>
+      <button id="debug-filter-all" class="dbf-active">ALL</button>
+      <button id="debug-filter-warn">WARN+</button>
+      <button id="debug-filter-error">ERROR</button>
       <button id="debug-export">Export JSON</button>
       <button id="debug-clear">Leeren</button>
       <button id="debug-close">✕</button>
