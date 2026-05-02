@@ -10,24 +10,20 @@
  * Die Deployment-URL als GitHub Secret APPS_SCRIPT_URL speichern.
  *
  * Sheet-Struktur "Bestellungen":
- *   A: ID          ← numerischer Identifier (neu, manuell angelegt)
- *   B: Artikelname
- *   C: Kategorie
- *   D: Lieferant
- *   E: REF-Nummer  ← wird per OCR befüllt
- *   F: Artikelcode
- *   G: Lagerort
- *   H: Bestellstatus
+ *   A: ID | B: Artikelname | C: Hersteller | D: Kategorie | E: Hauptlieferant
+ *   F: REF-Nummer ← OCR | G: Artikelcode | H: Lagerort | I: Bestellstatus
+ *   J: Notiz | K: Artikelbild | L: Bestellmenge | M: Einheit
+ *   N: Alt. Lieferant 1 | O: Alt. Lieferant 2 | P: Alt. Lieferant 3 | Q: Alt. Lieferant 4
  */
 
 var BESTELLUNGEN_SHEET       = 'Bestellungen';
 var LOG_SHEET                = 'OCR_Results';
 var USAGE_LOG_SHEET          = 'Nutzungslog';
 var SUPPLIERS_SHEET          = 'Lieferanten';
-var REF_COL                  = 5;   // Spalte E (1-based)
+var REF_COL                  = 6;   // Spalte F (1-based)
 var ID_COL_INDEX             = 0;   // Spalte A (0-based)
-var HAUPTLIEFERANT_COL_IDX   = 3;   // Spalte D (0-based)
-var ALT_LIEFERANT_COL_IDXS   = [12, 13, 14, 15];  // Spalten M–P (0-based)
+var HAUPTLIEFERANT_COL_IDX   = 4;   // Spalte E (0-based)
+var ALT_LIEFERANT_COL_IDXS   = [13, 14, 15, 16];  // Spalten N–Q (0-based)
 
 // [FIX] Konservativeres Limit: ~5 MB dekodiert → ~6.7 MB Base64
 var MAX_BASE64_LENGTH  = 6.7 * 1024 * 1024;
@@ -76,8 +72,16 @@ function doPost(e) {
       return handleGeminiOcr(payload.image, payload.mimeType);
     }
 
-    if (payload.action === 'search') {
+    if (payload.action === 'search' || payload.action === 'checkRef') {
       return searchByRef(payload.ref);
+    }
+
+    if (payload.action === 'lookupProduct') {
+      return handleLookupProduct(payload);
+    }
+
+    if (payload.action === 'addProduct') {
+      return handleAddProduct(payload);
     }
 
     if (payload.action === 'getProductSuppliers') {
@@ -369,6 +373,102 @@ function handleGeminiOcr(base64Image, mimeType) {
 }
 
 // ---------------------------------------------------------------------------
+// Gemini-Produktvorschlag (Standalone-Modus: neues Produkt anlegen)
+// ---------------------------------------------------------------------------
+
+function handleLookupProduct(payload) {
+  var ref = String(payload.ref || '').trim();
+  if (!ref) return jsonResponse({ status: 'error', message: 'ref fehlt' });
+
+  var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) return jsonResponse({ status: 'ok', suggestion: {} });
+
+  var url    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
+  var prompt = 'Medizinprodukt-Experte. REF: "' + ref + '". '
+    + 'Bestimme Artikelname, Hersteller, Kategorie (z.B. Brackets, Bänder, Drähte, Instrumente). '
+    + 'Antworte NUR als JSON: {"artikelname":"","hersteller":"","kategorie":""}. '
+    + 'Unbekannte Felder = leerer String.';
+
+  var body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { maxOutputTokens: 80, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
+  };
+
+  try {
+    var resp   = UrlFetchApp.fetch(url, {
+      method: 'POST', contentType: 'application/json',
+      payload: JSON.stringify(body), muteHttpExceptions: true
+    });
+    var result = JSON.parse(resp.getContentText());
+    var parts  = (result.candidates && result.candidates[0] &&
+                  result.candidates[0].content && result.candidates[0].content.parts) || [];
+    var textParts = parts.filter(function(p) { return !p.thought && p.text; });
+    var raw = textParts.length > 0 ? textParts[textParts.length - 1].text.trim() : '{}';
+    var jsonMatch = raw.match(/\{[\s\S]*\}/);
+    var suggestion = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    logUsage('lookupProduct', 'ok', 'ref=' + ref);
+    return jsonResponse({ status: 'ok', suggestion: suggestion });
+  } catch (err) {
+    Logger.log('handleLookupProduct ERROR: ' + err.message);
+    logUsage('lookupProduct', 'error', err.message);
+    return jsonResponse({ status: 'ok', suggestion: {} });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Neues Produkt in "Bestellungen" anlegen (Standalone-Modus)
+// ---------------------------------------------------------------------------
+
+function handleAddProduct(payload) {
+  var ref = String(payload.ref || '').trim();
+  if (!ref || !REF_PATTERN.test(ref)) {
+    return jsonResponse({ status: 'error', message: 'Ungültige REF' });
+  }
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(BESTELLUNGEN_SHEET);
+  if (!sheet) return jsonResponse({ status: 'error', message: 'Sheet "' + BESTELLUNGEN_SHEET + '" nicht gefunden' });
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (lockErr) {
+    return jsonResponse({ status: 'error', message: 'Server überlastet – bitte erneut versuchen' });
+  }
+
+  try {
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][REF_COL - 1]).trim() === ref) {
+        return jsonResponse({ status: 'already_exists', message: 'REF bereits vorhanden' });
+      }
+    }
+
+    var newId = sheet.getLastRow();  // neue Zeile = lastRow+1, ID = lastRow (ROW()-1 Formel)
+    var row = [
+      newId,
+      String(payload.name           || ''),  // B: Artikelname
+      String(payload.hersteller     || ''),  // C: Hersteller
+      String(payload.category       || ''),  // D: Kategorie
+      String(payload.hauptlieferant || ''),  // E: Hauptlieferant
+      ref,                                   // F: REF-Nummer
+      String(payload.articleCode    || ''),  // G: Artikelcode
+      String(payload.location       || ''),  // H: Lagerort
+      'Nachbestellen',                        // I: Bestellstatus
+      '', '', '', '',                         // J–M: leer
+      String(payload.alt1 || ''),            // N: Alt. Lieferant 1
+      String(payload.alt2 || ''),            // O: Alt. Lieferant 2
+      String(payload.alt3 || ''),            // P: Alt. Lieferant 3
+      String(payload.alt4 || ''),            // Q: Alt. Lieferant 4
+    ];
+    sheet.appendRow(row);
+
+    Logger.log('addProduct: ref=' + ref + ' id=' + newId);
+    logUsage('addProduct', 'ok', 'ref=' + ref + ' id=' + newId);
+    return jsonResponse({ status: 'ok', id: newId });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Produktspezifische Lieferanten lesen
 // ---------------------------------------------------------------------------
 
@@ -398,7 +498,7 @@ function handleGetProductSuppliers(payload) {
   for (var r = 1; r < bData.length; r++) {
     if (String(bData[r][ID_COL_INDEX]) !== id) continue;
 
-    // Hauptlieferant (Spalte D) + Alternativen (Spalten M–P) sammeln
+    // Hauptlieferant (Spalte E) + Alternativen (Spalten N–Q) sammeln
     var colIdxs = [HAUPTLIEFERANT_COL_IDX].concat(ALT_LIEFERANT_COL_IDXS);
     var suppliers = [];
     for (var c = 0; c < colIdxs.length; c++) {
