@@ -106,7 +106,20 @@ Populate column A of `Bestellungen` with `=ROW()-1` from A2 downwards. IDs must 
 
 ### Debugging
 
-The first `[INFO] canvas:` log entry confirms the crop is active:
+Activate with `?debug` in the URL. The overlay auto-refreshes every **500 ms** and shows entries newest-first. Three filter buttons: **ALL** / **WARN+** / **ERROR**.
+
+Log sources:
+
+| Source | What is logged |
+|---|---|
+| `main` | App start, scan triggered/aborted, OCR result, send payload, network changes |
+| `camera` | Stream resolution, facingMode, track label; tap-to-focus trigger |
+| `canvas` | Scan-zone dimensions on first frame (once only) |
+| `ocr` | Gemini mode, ping HTTP status, image encode time, network time, recognised ref, no-ref, API errors |
+| `send` | Online state + payload summary, HTTP response status, Apps Script error responses, queue enqueue/flush |
+| `prices` | checkRef status, lookupProduct suggestion yes/no, addProduct call + success, supplier count |
+
+The first `[INFO] canvas:` entry confirms the crop is active:
 ```
 [INFO] canvas: Scan-Zone: 808×472px → OCR-Input: 848×512px (Farbe, 20px pad, angezeigt: 1008×756px, Vollbild: 1280×720px)
 ```

@@ -44,6 +44,7 @@ Eine Web-App, die auf Android-Geräten läuft, per Kamera Herstellerreferenzen v
 | **`src/ocr.js`** | Sendet das Kamerabild (50 % skaliert, JPEG q0.7) per POST an den Apps Script Webhook; Gemini 2.5 Flash erkennt die REF-Nummer serverseitig |
 | **`src/send.js`** | Sendet das Ergebnis per POST an Apps Script; wenn offline → speichert in `localStorage` und sendet automatisch wenn Netzwerk zurückkommt |
 | **`src/prices.js`** | `checkRef` (REF im Sheet vorhanden?), `lookupProduct` (Gemini-Vorschlag), `addProduct` (neue Zeile anlegen), `getProductSuppliers` (Lieferanten eines Produkts lesen) |
+| **`src/logger.js`** | Ring-Buffer-Log (max. 300 Einträge, `localStorage`). Wird von allen Modulen genutzt. Debug-Overlay via `?debug` in der URL |
 | **`src/main.js`** | Liest URL-Parameter (`?id=`, `?name=`, `?mode=`), steuert den gesamten Ablauf |
 | **`apps-script/Code.gs`** | Empfängt alle POSTs, führt je nach Action die entsprechende Sheet-Operation durch |
 | **PWA** | App ist auf Android installierbar (Homescreen-Icon, läuft wie eine native App) |
@@ -215,6 +216,14 @@ Der **„REF-Nr. hinzufügen"**-Button funktioniert auch ohne Netzwerkverbindung
 
 ## Häufige Probleme
 
+**Diagnose mit dem Debug-Overlay**
+- Hänge `?debug` an die URL (z.B. `https://USERNAME.github.io/liveocr?debug`) – ein Overlay zeigt alle App-Ereignisse live in Echtzeit
+- Mit den Buttons **ALL / WARN+ / ERROR** kannst du direkt auf Fehler filtern
+- **Export JSON** lädt das vollständige Log als Datei – ideal um Fehler weiterzuschicken
+- Kombinierbar mit allen anderen Parametern: `?id=42&name=Damon%20Brackets&debug`
+
+---
+
 **Kamera startet nicht**
 - Stelle sicher, dass die Seite über HTTPS geöffnet wird (GitHub Pages ist immer HTTPS)
 - Prüfe in den Chrome-Einstellungen ob die Kamera-Berechtigung für die Seite erteilt ist: Chrome-Menü → Einstellungen → Website-Einstellungen → Kamera
@@ -255,6 +264,13 @@ Der **„REF-Nr. hinzufügen"**-Button funktioniert auch ohne Netzwerkverbindung
 
 Bevor du die App das erste Mal benutzt, kannst du das Apps Script direkt testen:
 
+**Verbindung testen** (ping – prüft ob Webhook erreichbar und Secret korrekt ist):
+```bash
+curl -L -X POST "DEINE_APPS_SCRIPT_URL" \
+  -d '{"action":"ping","secret":"DEIN_WEBHOOK_SECRET"}'
+```
+→ Antwort sollte `{"status":"ok"}` sein.
+
 **Write-Modus testen** (schreibt REF in die Zeile mit ID=1, Spalte F):
 ```bash
 curl -L -X POST "DEINE_APPS_SCRIPT_URL" \
@@ -282,6 +298,20 @@ curl -L -X POST "DEINE_APPS_SCRIPT_URL" \
   -d '{"action":"getProductSuppliers","id":"1","secret":"DEIN_WEBHOOK_SECRET"}'
 ```
 → Antwort: `{"status":"ok","suppliers":[{"name":"Orthowalker","baseUrl":"https://..."}]}`
+
+**Gemini-Produktvorschlag testen** (fragt Gemini nach Artikeldetails für eine REF):
+```bash
+curl -L -X POST "DEINE_APPS_SCRIPT_URL" \
+  -d '{"action":"lookupProduct","ref":"OW-2241-A","secret":"DEIN_WEBHOOK_SECRET"}'
+```
+→ Antwort: `{"status":"ok","suggestion":{"artikelname":"...","hersteller":"...","kategorie":"..."}}`
+
+**Neues Produkt anlegen testen** (legt eine neue Zeile in „Bestellungen" an):
+```bash
+curl -L -X POST "DEINE_APPS_SCRIPT_URL" \
+  -d '{"action":"addProduct","ref":"TEST-NEU","name":"Testprodukt","hersteller":"Hersteller GmbH","category":"Kategorie","secret":"DEIN_WEBHOOK_SECRET"}'
+```
+→ Antwort: `{"status":"ok"}`
 
 ---
 
