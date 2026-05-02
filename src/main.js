@@ -33,7 +33,7 @@ async function main() {
   // Search-Modus: Schnittstelle vorbereitet, noch nicht aktiv
   if (mode === 'search') {
     // TODO: Search-Modus – OCR-Ergebnis gegen Sheet abfragen und Produkt anzeigen
-    // Aktivierung: apps-script/Code.gs searchByRef() auskommentieren + hier aufrufen
+    // Aktivierung: searchByRef() in Code.gs ist bereit; hier UI und Aufruf ergänzen
     setStatus('Search-Modus noch nicht aktiv', 'error');
     hideLoading();
     return;
