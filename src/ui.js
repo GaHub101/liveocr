@@ -70,58 +70,38 @@ export function hideProductBanner() {
   productBanner.classList.remove('visible');
 }
 
-export function showAvailability(results) {
+export function showSupplierLinks(suppliers, ref) {
   const panel = document.getElementById('avail-panel');
   const list  = document.getElementById('avail-list');
   if (!panel || !list) return;
 
   list.innerHTML = '';
 
-  if (!results || results.length === 0) {
+  if (!suppliers || suppliers.length === 0 || !ref) {
     panel.style.display = 'none';
     return;
   }
 
-  results.forEach(r => {
+  suppliers.forEach(s => {
     const row = document.createElement('div');
     row.className = 'avail-row';
 
-    const nameEl = document.createElement('span');
-    nameEl.className = 'avail-name';
-    nameEl.textContent = r.name;
-    row.appendChild(nameEl);
+    const name = document.createElement('span');
+    name.className   = 'avail-name';
+    name.textContent = s.name;
 
-    if (r.availability === 'not_found') {
-      const span = document.createElement('span');
-      span.className = 'avail-none';
-      span.textContent = 'Nicht verfügbar';
-      row.appendChild(span);
-    } else {
-      const a = document.createElement('a');
-      a.href = r.url;
-      a.target = '_blank';
-      a.rel = 'noopener';
-      if (r.availability === 'unknown') {
-        a.className = 'avail-link unknown';
-        a.textContent = 'Öffnen (nicht geprüft)';
-      } else {
-        a.className = 'avail-link';
-        a.textContent = 'Im Browser öffnen →';
-      }
-      row.appendChild(a);
-    }
+    const a = document.createElement('a');
+    a.className   = 'avail-link';
+    a.href        = s.baseUrl + encodeURIComponent(ref);
+    a.target      = '_blank';
+    a.rel         = 'noopener';
+    a.textContent = 'Öffnen →';
 
+    row.appendChild(name);
+    row.appendChild(a);
     list.appendChild(row);
   });
 
-  panel.style.display = 'block';
-}
-
-export function showAvailabilityLoading() {
-  const panel = document.getElementById('avail-panel');
-  const list  = document.getElementById('avail-list');
-  if (!panel || !list) return;
-  list.innerHTML = '<div class="avail-loading">Verfügbarkeit wird geprüft…</div>';
   panel.style.display = 'block';
 }
 

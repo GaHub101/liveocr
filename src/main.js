@@ -6,9 +6,9 @@ import { log, getLogs, clearLogs, exportLogs }      from './logger.js';
 import {
   setStatus, setLoadingMessage, hideLoading,
   showResult, setSendState, updateQueueBadge,
-  showProductBanner, showAvailability, showAvailabilityLoading,
+  showProductBanner, showSupplierLinks,
 } from './ui.js';
-import { checkAvailability } from './prices.js';
+import { getProductSuppliers } from './prices.js';
 
 const video   = document.getElementById('video');
 const canvas  = document.getElementById('canvas');
@@ -23,6 +23,7 @@ const mode        = params.get('mode');  // 'search' für späteren Such-Modus
 
 let lastText       = '';
 let lastConfidence = 0;
+let cachedSuppliers = [];
 
 async function main() {
   // Search-Modus: Schnittstelle vorbereitet, noch nicht aktiv
@@ -37,6 +38,7 @@ async function main() {
   // Produkt-Banner anzeigen wenn aus AppSheet mit ?id= geöffnet
   if (productId) {
     showProductBanner(productName, productId);
+    getProductSuppliers(productId).then(s => { cachedSuppliers = s; });
   }
 
   log.info('main', `App gestartet – mode=${mode ?? 'standalone'}, id=${productId ?? '–'}`);
@@ -72,16 +74,13 @@ async function main() {
     scanBtn.textContent = 'Scannt…';
     setStatus('Scannt…', 'working');
     // Panel zurücksetzen vor neuem Scan
-    showAvailability([]);
+    showSupplierLinks([], '');
     await scheduleRecognition(canvas, (text, confidence) => {
       lastText       = text;
       lastConfidence = confidence;
       showResult(text, confidence);
       setStatus('Erkannt', 'ready');
-      if (text) {
-        showAvailabilityLoading();
-        checkAvailability(text).then(({ results }) => showAvailability(results));
-      }
+      if (text) showSupplierLinks(cachedSuppliers, text);
     });
     scanBtn.disabled = false;
     scanBtn.textContent = 'Scannen';

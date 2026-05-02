@@ -20,12 +20,14 @@
  *   H: Bestellstatus
  */
 
-var BESTELLUNGEN_SHEET = 'Bestellungen';
-var LOG_SHEET          = 'OCR_Results';
-var USAGE_LOG_SHEET    = 'Nutzungslog';
-var SUPPLIERS_SHEET    = 'Lieferanten';
-var REF_COL            = 5;  // Spalte E (1-based)
-var ID_COL_INDEX       = 0;  // Spalte A (0-based für Array-Zugriff)
+var BESTELLUNGEN_SHEET       = 'Bestellungen';
+var LOG_SHEET                = 'OCR_Results';
+var USAGE_LOG_SHEET          = 'Nutzungslog';
+var SUPPLIERS_SHEET          = 'Lieferanten';
+var REF_COL                  = 5;   // Spalte E (1-based)
+var ID_COL_INDEX             = 0;   // Spalte A (0-based)
+var HAUPTLIEFERANT_COL_IDX   = 3;   // Spalte D (0-based)
+var ALT_LIEFERANT_COL_IDXS   = [12, 13, 14, 15];  // Spalten M–P (0-based)
 
 // [FIX] Konservativeres Limit: ~5 MB dekodiert → ~6.7 MB Base64
 var MAX_BASE64_LENGTH  = 6.7 * 1024 * 1024;
@@ -78,8 +80,8 @@ function doPost(e) {
       return searchByRef(payload.ref);
     }
 
-    if (payload.action === 'checkAvailability') {
-      return handleCheckAvailability(payload);
+    if (payload.action === 'getProductSuppliers') {
+      return handleGetProductSuppliers(payload);
     }
 
     if (payload.id) {
@@ -367,59 +369,51 @@ function handleGeminiOcr(base64Image, mimeType) {
 }
 
 // ---------------------------------------------------------------------------
-// Lieferanten-Verfügbarkeitscheck
+// Produktspezifische Lieferanten lesen
 // ---------------------------------------------------------------------------
 
-function handleCheckAvailability(payload) {
-  var ref = String(payload.ref || '').trim();
-  if (!ref || !REF_PATTERN.test(ref)) {
-    return jsonResponse({ status: 'error', message: 'Ungültige REF' });
-  }
+function handleGetProductSuppliers(payload) {
+  var id = String(payload.id || '').trim();
+  if (!id) return jsonResponse({ status: 'error', message: 'id fehlt' });
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SUPPLIERS_SHEET);
-  if (!sheet) {
-    sheet = ss.insertSheet(SUPPLIERS_SHEET);
-    sheet.appendRow(['Name', 'Such-URL', 'Aktiv']);
-    sheet.setFrozenRows(1);
-    logUsage('checkAvailability', 'ok', 'Lieferanten-Tab neu angelegt');
-    return jsonResponse({ status: 'ok', results: [] });
+
+  // Such-URL-Map aus "Lieferanten"-Tab aufbauen
+  var urlMap = {};
+  var lSheet = ss.getSheetByName(SUPPLIERS_SHEET);
+  if (lSheet) {
+    var lData = lSheet.getDataRange().getValues();
+    for (var i = 1; i < lData.length; i++) {
+      var sName = String(lData[i][0]).trim();
+      var sUrl  = String(lData[i][1]).trim();
+      if (sName && sUrl) urlMap[sName] = sUrl;
+    }
   }
 
-  var data = sheet.getDataRange().getValues();
-  var results = [];
+  // Produkt-Zeile in "Bestellungen" suchen
+  var bSheet = ss.getSheetByName(BESTELLUNGEN_SHEET);
+  if (!bSheet) return jsonResponse({ status: 'error', message: 'Sheet "' + BESTELLUNGEN_SHEET + '" nicht gefunden' });
 
-  for (var i = 1; i < data.length; i++) {
-    var name    = String(data[i][0]).trim();
-    var baseUrl = String(data[i][1]).trim();
-    var active  = String(data[i][2]).trim().toUpperCase();
+  var bData = bSheet.getDataRange().getValues();
+  for (var r = 1; r < bData.length; r++) {
+    if (String(bData[r][ID_COL_INDEX]) !== id) continue;
 
-    if (!name || !baseUrl || active === 'FALSE') continue;
-
-    var searchUrl = baseUrl + encodeURIComponent(ref);
-    var availability = 'unknown';
-
-    try {
-      var resp = UrlFetchApp.fetch(searchUrl, {
-        method: 'GET',
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GoogleAppsScript)' },
-        followRedirects: true,
-        muteHttpExceptions: true
-      });
-      var code = resp.getResponseCode();
-      if (code === 200) {
-        var html = resp.getContentText();
-        availability = (html.indexOf(ref) !== -1) ? 'found' : 'not_found';
+    // Hauptlieferant (Spalte D) + Alternativen (Spalten M–P) sammeln
+    var colIdxs = [HAUPTLIEFERANT_COL_IDX].concat(ALT_LIEFERANT_COL_IDXS);
+    var suppliers = [];
+    for (var c = 0; c < colIdxs.length; c++) {
+      var name = String(bData[r][colIdxs[c]] || '').trim();
+      if (name && urlMap[name]) {
+        suppliers.push({ name: name, baseUrl: urlMap[name] });
       }
-    } catch (fetchErr) {
-      Logger.log('checkAvailability: UrlFetch error for ' + name + ': ' + fetchErr.message);
     }
 
-    results.push({ name: name, url: searchUrl, availability: availability });
+    logUsage('getProductSuppliers', 'ok', 'id=' + id + ' count=' + suppliers.length);
+    return jsonResponse({ status: 'ok', suppliers: suppliers });
   }
 
-  logUsage('checkAvailability', 'ok', 'ref=' + ref + ' count=' + results.length);
-  return jsonResponse({ status: 'ok', results: results });
+  logUsage('getProductSuppliers', 'not_found', 'id=' + id);
+  return jsonResponse({ status: 'not_found', suppliers: [] });
 }
 
 // ---------------------------------------------------------------------------
