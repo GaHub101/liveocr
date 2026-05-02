@@ -87,7 +87,7 @@ async function main() {
     setSendState('sending');
     setStatus('Sende…', 'working');
     try {
-      await sendOrQueue(
+      const result = await sendOrQueue(
         {
           ref: lastText,
           confidence: Math.round(lastConfidence),
@@ -96,8 +96,13 @@ async function main() {
         },
         updateQueueBadge,
       );
-      setSendState(navigator.onLine ? 'sent' : 'queued');
-      setStatus(navigator.onLine ? 'Gesendet' : 'Offline – in Warteschlange', navigator.onLine ? 'ready' : 'offline');
+      if (navigator.onLine && (result?.status === 'already_exists' || result?.status === 'conflict')) {
+        setSendState('already_exists');
+        setStatus('REF bereits vorhanden', 'ready');
+      } else {
+        setSendState(navigator.onLine ? 'sent' : 'queued');
+        setStatus(navigator.onLine ? 'Hinzugefügt' : 'Offline – in Warteschlange', navigator.onLine ? 'ready' : 'offline');
+      }
     } catch (err) {
       log.error('main', 'Senden fehlgeschlagen', err);
       setSendState('error');
