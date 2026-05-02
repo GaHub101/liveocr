@@ -3,11 +3,11 @@
 ## Offen
 
 ### Search-Modus implementieren
-Der Scanner kann aktuell nur schreiben (REF einem bekannten Produkt zuweisen). Ein Such-Modus, der ein unbekanntes Etikett scannt und das passende Produkt findet, ist technisch vorbereitet aber nicht aktiv.
+Der Scanner kann aktuell nur schreiben (REF einem bekannten Produkt zuweisen) oder ein neues Produkt anlegen. Ein Such-Modus, der ein unbekanntes Etikett scannt und das passende **bestehende** Produkt findet, ist technisch vorbereitet aber nicht aktiv.
 
 **Was fehlt:**
 - `?mode=search` in `src/main.js` aktivieren (TODO-Kommentar vorhanden)
-- `searchByRef()` in `apps-script/Code.gs` auskommentieren und in `doPost` verkabeln
+- `searchByRef()` in `apps-script/Code.gs` ist bereits aktiv; hier UI und Aufruf in `main.js` ergänzen
 - UI für Suchergebnis (Produktname + ID anzeigen)
 
 ---
@@ -34,3 +34,6 @@ Der Webhook ist durch ein Shared Secret geschützt, hat aber kein serverseitiges
 - [x] Offline-Queue mit Auto-Flush bei Reconnect
 - [x] Debug-Overlay (`?debug`) mit Log-Export
 - [x] AppSheet-Integration via `?id=` URL-Parameter
+- [x] Neue Sheet-Struktur: 17 Spalten A–Q (Hersteller, Hauptlieferant, Alt. Lieferanten 1–4)
+- [x] Produktspezifische Lieferanten-Links nach Scan im `?id=`-Modus
+- [x] Standalone-Modus: „Neues Produkt anlegen"-Button (nur wenn REF neu), Gemini-vorausgefülltes Formular, Apps Script `addProduct` mit LockService

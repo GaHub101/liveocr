@@ -73,20 +73,6 @@
       box-shadow: 0 0 0 9999px rgba(0,0,0,0.35);
     }
 
-    #scan-line {
-      position: absolute;
-      left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, #3b82f6, transparent);
-      animation: scan 2s linear infinite;
-      top: 0;
-    }
-
-    @keyframes scan {
-      0%   { top: 0%; }
-      100% { top: 100%; }
-    }
-
     #canvas { display: none; }
     body.debug-mode #canvas {
       display: block;
@@ -220,6 +206,113 @@
     }
 
     #queue-info.visible { display: block; }
+
+    #avail-panel {
+      margin-top: 12px;
+      border-top: 1px solid #334155;
+      padding-top: 10px;
+      width: 100%;
+    }
+
+    .avail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 0;
+      border-bottom: 1px solid #1e293b;
+      font-size: 14px;
+    }
+
+    .avail-row:last-child { border-bottom: none; }
+
+    .avail-name { font-weight: 500; color: #f1f5f9; }
+
+    .avail-link {
+      font-size: 13px;
+      color: #3b82f6;
+      text-decoration: none;
+      padding: 4px 10px;
+      border: 1px solid #3b82f6;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    #lookup-btn {
+      background: #065f46;
+      margin-top: 0;
+    }
+
+    #lookup-btn:not(:disabled):active { background: #047857; }
+
+    #lookup-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 150;
+      padding: 16px;
+    }
+
+    #lookup-modal {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 20px 18px 16px;
+      width: 100%;
+      max-width: 420px;
+      max-height: 90dvh;
+      overflow-y: auto;
+    }
+
+    .lookup-title {
+      font-weight: 600;
+      font-size: 1rem;
+      color: #f1f5f9;
+      margin-bottom: 6px;
+    }
+
+    #lookup-ref-line {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 12px;
+    }
+
+    #lookup-loading {
+      color: #94a3b8;
+      font-size: 13px;
+      text-align: center;
+      padding: 12px 0;
+    }
+
+    #lookup-form label {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 8px;
+    }
+
+    #lookup-form input {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      color: #f1f5f9;
+      padding: 7px 10px;
+      font-size: 14px;
+    }
+
+    #lookup-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    #lookup-cancel-btn  { background: #334155; flex: 1; }
+    #lookup-confirm-btn { background: #1e40af; flex: 2; }
+    #lookup-confirm-btn:disabled { opacity: 0.4; cursor: default; }
 
     #loading-screen {
       position: fixed;
@@ -361,7 +454,6 @@
     <video id="video" autoplay playsinline muted></video>
     <div id="scan-overlay">
       <div id="scan-frame">
-        <div id="scan-line"></div>
       </div>
     </div>
   </div>
@@ -385,7 +477,35 @@
 
     <button id="scan-btn">Scannen</button>
     <button id="send-btn" disabled>REF-Nr. hinzufügen</button>
+    <button id="lookup-btn" style="display:none">Neues Produkt anlegen</button>
     <div id="queue-info"></div>
+    <div id="avail-panel" style="display:none">
+      <div id="avail-list"></div>
+    </div>
+  </div>
+
+  <div id="lookup-backdrop" style="display:none">
+    <div id="lookup-modal">
+      <div class="lookup-title">Neues Produkt bestätigen</div>
+      <div id="lookup-ref-line"></div>
+      <div id="lookup-loading">Suche läuft…</div>
+      <div id="lookup-form" style="display:none">
+        <label>Artikelname *<input id="lk-name" type="text" required></label>
+        <label>Hersteller<input id="lk-hersteller" type="text"></label>
+        <label>Kategorie<input id="lk-cat" type="text"></label>
+        <label>Hauptlieferant<input id="lk-sup" type="text"></label>
+        <label>Alt. Lieferant 1<input id="lk-alt1" type="text"></label>
+        <label>Alt. Lieferant 2<input id="lk-alt2" type="text"></label>
+        <label>Alt. Lieferant 3<input id="lk-alt3" type="text"></label>
+        <label>Alt. Lieferant 4<input id="lk-alt4" type="text"></label>
+        <label>Artikelcode<input id="lk-code" type="text"></label>
+        <label>Lagerort<input id="lk-loc" type="text"></label>
+      </div>
+      <div id="lookup-actions">
+        <button id="lookup-cancel-btn">Abbrechen</button>
+        <button id="lookup-confirm-btn" style="display:none">Bestätigen</button>
+      </div>
+    </div>
   </div>
 
   <div id="debug-overlay">

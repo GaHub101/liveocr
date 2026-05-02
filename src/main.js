@@ -6,13 +6,18 @@ import { log, getLogs, clearLogs, exportLogs }      from './logger.js';
 import {
   setStatus, setLoadingMessage, hideLoading,
   showResult, setSendState, updateQueueBadge,
-  showProductBanner,
+  showProductBanner, showSupplierLinks,
+  showLookupButton, setLookupModal, getLookupFormValues,
 } from './ui.js';
+import { checkRef, lookupProduct, addProduct, getProductSuppliers } from './prices.js';
 
 const video   = document.getElementById('video');
 const canvas  = document.getElementById('canvas');
-const scanBtn = document.getElementById('scan-btn');
-const sendBtn = document.getElementById('send-btn');
+const scanBtn        = document.getElementById('scan-btn');
+const sendBtn        = document.getElementById('send-btn');
+const lookupBtn      = document.getElementById('lookup-btn');
+const lookupConfirm  = document.getElementById('lookup-confirm-btn');
+const lookupCancel   = document.getElementById('lookup-cancel-btn');
 
 // URL-Parameter auslesen
 const params      = new URLSearchParams(location.search);
@@ -22,12 +27,13 @@ const mode        = params.get('mode');  // 'search' für späteren Such-Modus
 
 let lastText       = '';
 let lastConfidence = 0;
+let cachedSuppliers = [];
 
 async function main() {
   // Search-Modus: Schnittstelle vorbereitet, noch nicht aktiv
   if (mode === 'search') {
     // TODO: Search-Modus – OCR-Ergebnis gegen Sheet abfragen und Produkt anzeigen
-    // Aktivierung: apps-script/Code.gs searchByRef() auskommentieren + hier aufrufen
+    // Aktivierung: searchByRef() in Code.gs ist bereit; hier UI und Aufruf ergänzen
     setStatus('Search-Modus noch nicht aktiv', 'error');
     hideLoading();
     return;
@@ -36,6 +42,7 @@ async function main() {
   // Produkt-Banner anzeigen wenn aus AppSheet mit ?id= geöffnet
   if (productId) {
     showProductBanner(productName, productId);
+    getProductSuppliers(productId).then(s => { cachedSuppliers = s; });
   }
 
   log.info('main', `App gestartet – mode=${mode ?? 'standalone'}, id=${productId ?? '–'}`);
@@ -64,17 +71,58 @@ async function main() {
   }
   requestAnimationFrame(loop);
 
+  // Standalone-Modus: Modal-Handler registrieren
+  if (!productId) {
+    lookupBtn.addEventListener('click', async () => {
+      if (!lastText) return;
+      lookupBtn.disabled = true;
+      setLookupModal('loading', lastText, null);
+      const suggestion = await lookupProduct(lastText);
+      setLookupModal('form', lastText, suggestion);
+      lookupBtn.disabled = false;
+    });
+    lookupCancel.addEventListener('click', () => setLookupModal('hidden'));
+    lookupConfirm.addEventListener('click', async () => {
+      const vals = getLookupFormValues();
+      if (!vals.name) { document.getElementById('lk-name').focus(); return; }
+      lookupConfirm.disabled = true;
+      lookupConfirm.textContent = 'Speichern…';
+      try {
+        await addProduct({ ref: lastText, ...vals });
+        setLookupModal('hidden');
+        setStatus('Produkt angelegt ✓', 'ready');
+        showLookupButton(false);
+      } catch (err) {
+        log.error('main', 'addProduct fehlgeschlagen', err);
+        setStatus(`Fehler: ${err.message}`, 'error');
+      }
+      lookupConfirm.disabled = false;
+      lookupConfirm.textContent = 'Bestätigen';
+    });
+  }
+
   // Scan-Button
   scanBtn.addEventListener('click', async () => {
     if (!preprocessFrame(video, canvas)) return;
     scanBtn.disabled = true;
     scanBtn.textContent = 'Scannt…';
     setStatus('Scannt…', 'working');
+    // Panels zurücksetzen vor neuem Scan
+    showSupplierLinks([], '');
+    showLookupButton(false);
+    setLookupModal('hidden');
     await scheduleRecognition(canvas, (text, confidence) => {
       lastText       = text;
       lastConfidence = confidence;
       showResult(text, confidence);
       setStatus('Erkannt', 'ready');
+      if (text) {
+        if (productId) {
+          showSupplierLinks(cachedSuppliers, text);
+        } else {
+          checkRef(text).then(result => showLookupButton(result.status === 'not_found'));
+        }
+      }
     });
     scanBtn.disabled = false;
     scanBtn.textContent = 'Scannen';

@@ -48,16 +48,17 @@ Kamera-Zugriff funktioniert auf `localhost` ohne HTTPS.
 
 Damit der Scanner aus AppSheet heraus einem bestimmten Produkt zugewiesen werden kann:
 
-1. Google Sheet: neue Spalte **A** einfügen, Header `ID`, Werte `1…N` per `=ROW()-1` in A2 und runterziehen
-2. In AppSheet eine **Action** anlegen:
+1. Google Sheet: Spaltenstruktur sicherstellen (A: ID, F: REF-Nummer – siehe `MANUAL.md` für vollständige Struktur)
+2. Spalte A mit `=ROW()-1` ab A2 befüllen und runterziehen
+3. In AppSheet eine **Action** anlegen:
    - Typ: **Open a URL**
    - Formel:
      ```
      CONCATENATE("https://USERNAME.github.io/liveocr?id=", [ID], "&name=", ENCODEURL([Artikelname]))
      ```
-3. Action auf dem gewünschten View hinzufügen
+4. Action auf dem gewünschten View hinzufügen
 
-Der Scanner zeigt dann ein blaues Banner „Produkt: [Artikelname]" und schreibt die erkannte REF-Nummer direkt in die Spalte **E (REF-Nummer)** der entsprechenden Zeile.
+Der Scanner zeigt dann ein blaues Banner „Produkt: [Artikelname]" und schreibt die erkannte REF-Nummer direkt in **Spalte F (REF-Nummer)** der entsprechenden Zeile. Nach dem Scan erscheinen außerdem „Öffnen →"-Links zu allen zugewiesenen Lieferanten des Produkts.
 
 ---
 
@@ -93,7 +94,7 @@ https://USERNAME.github.io/liveocr?id=42&name=Damon%20Brackets&debug
 **Scan-Zone im Log prüfen:**
 Der erste `[INFO] canvas:`-Eintrag zeigt die tatsächlich verarbeitete Bildgröße:
 ```
-[INFO] canvas: Scan-Zone: 1024×216px (Vollbild: 1280×720px)
+[INFO] canvas: Scan-Zone: 808×472px → OCR-Input: 848×512px (Farbe, 20px pad, angezeigt: 1008×756px, Vollbild: 1280×720px)
 ```
 Stimmt Scan-Zone mit Vollbild überein, ist der Crop nicht aktiv (Cache-Problem).
 
@@ -123,18 +124,18 @@ Fehler auf der Google-Seite sind in Apps Script sichtbar:
 Browser (Android Chrome)
   └── index.html
       ├── src/camera.js   – getUserMedia, facingMode: environment
-      ├── src/canvas.js   – Preprocessing: Graustufen → Kontrast → Otsu-Binarisierung
-      │                     Crop: nur Scan-Rahmen (80 % × 30 %, zentriert) wird verarbeitet
+      ├── src/canvas.js   – Crop: Scan-Rahmen (80 % × 60 %, zentriert) + 20 px weißer Rand
+      │                     Farbbild direkt an Gemini – kein Graustufen-/Binarisierungs-Schritt
       ├── src/ocr.js      – Gemini 2.5 Flash via Apps Script Webhook; Frame als base64-JPEG
-      │                     gesendet, kein lokales OCR
-      ├── src/send.js     – fetch() + localStorage Offline-Queue
+      ├── src/send.js     – fetch() + localStorage Offline-Queue (OCR_Results / writeRef)
+      ├── src/prices.js   – checkRef, lookupProduct, addProduct, getProductSuppliers
       ├── src/logger.js   – Ring-Buffer-Log (localStorage, 300 Einträge, ?debug-Overlay)
-      ├── src/ui.js       – DOM-Updates
+      ├── src/ui.js       – DOM-Updates (Status, Ergebnis, Banner, Lieferanten-Links, Modal)
       └── src/main.js     – Einstiegspunkt
 
 Apps Script (Google)
-  └── apps-script/Code.gs – doPost → handleGeminiOcr (OCR) / writeRef (id vorhanden) /
-                             appendLog (standalone)
+  └── apps-script/Code.gs – doPost → ocr / checkRef / lookupProduct / addProduct /
+                             getProductSuppliers / writeRef (id) / appendLog (standalone)
 ```
 
 ## CORS-Hinweis

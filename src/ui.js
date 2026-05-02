@@ -70,6 +70,84 @@ export function hideProductBanner() {
   productBanner.classList.remove('visible');
 }
 
+export function showSupplierLinks(suppliers, ref) {
+  const panel = document.getElementById('avail-panel');
+  const list  = document.getElementById('avail-list');
+  if (!panel || !list) return;
+
+  list.innerHTML = '';
+
+  if (!suppliers || suppliers.length === 0 || !ref) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  suppliers.forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'avail-row';
+
+    const name = document.createElement('span');
+    name.className   = 'avail-name';
+    name.textContent = s.name;
+
+    const a = document.createElement('a');
+    a.className   = 'avail-link';
+    a.href        = s.baseUrl + encodeURIComponent(ref);
+    a.target      = '_blank';
+    a.rel         = 'noopener';
+    a.textContent = 'Öffnen →';
+
+    row.appendChild(name);
+    row.appendChild(a);
+    list.appendChild(row);
+  });
+
+  panel.style.display = 'block';
+}
+
+export function showLookupButton(show) {
+  document.getElementById('lookup-btn').style.display = show ? 'block' : 'none';
+}
+
+export function setLookupModal(state, ref, suggestion) {
+  const backdrop   = document.getElementById('lookup-backdrop');
+  const loading    = document.getElementById('lookup-loading');
+  const form       = document.getElementById('lookup-form');
+  const confirmBtn = document.getElementById('lookup-confirm-btn');
+  const refLine    = document.getElementById('lookup-ref-line');
+
+  if (state === 'hidden') { backdrop.style.display = 'none'; return; }
+  backdrop.style.display = 'flex';
+  if (ref) refLine.textContent = 'REF: ' + ref;
+  loading.style.display    = state === 'loading' ? 'block' : 'none';
+  form.style.display       = state === 'form'    ? 'block' : 'none';
+  confirmBtn.style.display = state === 'form'    ? 'inline-block' : 'none';
+
+  if (state === 'form') {
+    const s = suggestion || {};
+    document.getElementById('lk-name').value       = s.artikelname || '';
+    document.getElementById('lk-hersteller').value = s.hersteller  || '';
+    document.getElementById('lk-cat').value        = s.kategorie   || '';
+    ['lk-sup','lk-alt1','lk-alt2','lk-alt3','lk-alt4','lk-code','lk-loc']
+      .forEach(id => { document.getElementById(id).value = ''; });
+  }
+}
+
+export function getLookupFormValues() {
+  return {
+    name:           document.getElementById('lk-name').value.trim(),
+    hersteller:     document.getElementById('lk-hersteller').value.trim(),
+    category:       document.getElementById('lk-cat').value.trim(),
+    hauptlieferant: document.getElementById('lk-sup').value.trim(),
+    alt1:           document.getElementById('lk-alt1').value.trim(),
+    alt2:           document.getElementById('lk-alt2').value.trim(),
+    alt3:           document.getElementById('lk-alt3').value.trim(),
+    alt4:           document.getElementById('lk-alt4').value.trim(),
+    articleCode:    document.getElementById('lk-code').value.trim(),
+    location:       document.getElementById('lk-loc').value.trim(),
+  };
+}
+
 export function updateQueueBadge(count) {
   if (count > 0) {
     queueInfo.textContent = `${count} Einträge offline in Warteschlange – werden gesendet sobald Netzwerk verfügbar`;
