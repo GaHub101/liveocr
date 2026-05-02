@@ -8,17 +8,22 @@ Browser-App für Android: liest Herstellerreferenzen per Kamera und schreibt sie
 
 1. Google Sheet öffnen → **Extensions → Apps Script**
 2. Inhalt von `apps-script/Code.gs` einfügen und speichern
-3. **Deploy → New deployment → Web app**
+3. **Projekteinstellungen → Script Properties** – zwei Einträge anlegen:
+   - `GEMINI_API_KEY` = dein Google AI Studio API-Key
+   - `WEBHOOK_SECRET` = ein zufälliger langer String (z.B. `openssl rand -hex 32`)
+4. **Deploy → New deployment → Web app**
    - Execute as: **Me**
    - Who has access: **Anyone**
-4. Deployment-URL kopieren
+5. Deployment-URL kopieren
 
 ### 2. Lokal testen
 
 ```bash
 npm install
 cp .env.example .env.local
-# .env.local: VITE_APPS_SCRIPT_URL=<deine Deployment-URL>
+# .env.local:
+#   VITE_APPS_SCRIPT_URL=<deine Deployment-URL>
+#   VITE_WEBHOOK_SECRET=<dasselbe Token wie in Apps Script Script Properties>
 npm run dev
 ```
 
@@ -27,9 +32,9 @@ Kamera-Zugriff funktioniert auf `localhost` ohne HTTPS.
 ### 3. GitHub Pages deployen
 
 1. Repo auf GitHub pushen (Branch `main`)
-2. **Settings → Secrets and variables → Actions → New secret**
-   - Name: `APPS_SCRIPT_URL`
-   - Value: Deployment-URL aus Schritt 1
+2. **Settings → Secrets and variables → Actions → New secret** – zwei Secrets anlegen:
+   - `APPS_SCRIPT_URL` = Deployment-URL aus Schritt 1
+   - `WEBHOOK_SECRET` = dasselbe Token wie in Apps Script Script Properties
 3. **Settings → Pages → Source: GitHub Actions**
 4. Push auf `main` → GitHub Actions baut und deployed automatisch
 

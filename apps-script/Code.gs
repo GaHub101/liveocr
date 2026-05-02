@@ -37,6 +37,13 @@ function doPost(e) {
     }
 
     var payload = JSON.parse(e.postData.contents);
+
+    var secret = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
+    if (secret && payload.secret !== secret) {
+      Logger.log('doPost: Unauthorized – falsches oder fehlendes Secret');
+      return jsonResponse({ status: 'error', message: 'Unauthorized' });
+    }
+
     Logger.log('doPost: payload action=' + (payload.action || 'none') + ' id=' + (payload.id || ''));
 
     if (payload.action === 'ocr') {

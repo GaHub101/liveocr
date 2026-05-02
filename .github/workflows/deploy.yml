@@ -33,11 +33,13 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Inject Apps Script URL
+      - name: Inject env vars
         env:
           VITE_APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
+          VITE_WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
         run: |
           echo "VITE_APPS_SCRIPT_URL=${VITE_APPS_SCRIPT_URL}" > .env.production
+          echo "VITE_WEBHOOK_SECRET=${VITE_WEBHOOK_SECRET}" >> .env.production
 
       - name: Build
         run: npm run build

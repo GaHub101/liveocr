@@ -29,7 +29,7 @@ export function preprocessFrame(video, canvas) {
     srcY = 0;
   }
 
-  // Crop to scan zone (80% × 30%, centred within the displayed region)
+  // Crop to scan zone (80% × 60%, centred within the displayed region)
   const zoneW = Math.round(srcW * ZONE_W_RATIO);
   const zoneH = Math.round(srcH * ZONE_H_RATIO);
   const zoneX = Math.round(srcX + (srcW - zoneW) / 2);

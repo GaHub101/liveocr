@@ -5,6 +5,7 @@ const QUEUE_KEY = 'ocr_send_queue';
 // URL wird zur Build-Zeit von Vite injiziert (aus .env.local / GitHub Secret)
 // Fallback: leerer String – App zeigt Fehlermeldung
 const WEBHOOK_URL = import.meta.env.VITE_APPS_SCRIPT_URL || '';
+const WEBHOOK_SECRET = import.meta.env.VITE_WEBHOOK_SECRET || '';
 
 export function getQueueLength() {
   return loadQueue().length;
@@ -60,7 +61,7 @@ async function postToSheet(payload) {
   // Apps Script empfängt Body als text/plain und parst ihn mit JSON.parse(e.postData.contents)
   const resp = await fetch(WEBHOOK_URL, {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, secret: WEBHOOK_SECRET }),
   });
 
   if (!resp.ok) {
