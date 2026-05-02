@@ -73,20 +73,6 @@
       box-shadow: 0 0 0 9999px rgba(0,0,0,0.35);
     }
 
-    #scan-line {
-      position: absolute;
-      left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, #3b82f6, transparent);
-      animation: scan 2s linear infinite;
-      top: 0;
-    }
-
-    @keyframes scan {
-      0%   { top: 0%; }
-      100% { top: 100%; }
-    }
-
     #canvas { display: none; }
     body.debug-mode #canvas {
       display: block;
@@ -468,7 +454,6 @@
     <video id="video" autoplay playsinline muted></video>
     <div id="scan-overlay">
       <div id="scan-frame">
-        <div id="scan-line"></div>
       </div>
     </div>
   </div>
