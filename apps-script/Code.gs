@@ -417,6 +417,7 @@ function handleLookupProduct(payload) {
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
   var body = {
     contents: [{ parts: [{ text: prompt }] }],
+    tools: [{ google_search: {} }],
     generationConfig: { maxOutputTokens: 250, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
   };
 
@@ -432,7 +433,8 @@ function handleLookupProduct(payload) {
     var raw = textParts.length > 0 ? textParts[textParts.length - 1].text.trim() : '{}';
     var jsonMatch = raw.match(/\{[\s\S]*\}/);
     var suggestion = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
-    logUsage('lookupProduct', 'ok', 'ref=' + ref + ' hersteller=' + hersteller);
+    var grounded = !!(result.candidates && result.candidates[0] && result.candidates[0].groundingMetadata);
+    logUsage('lookupProduct', 'ok', 'ref=' + ref + ' hersteller=' + hersteller + ' grounded=' + grounded);
     return jsonResponse({ status: 'ok', suggestion: suggestion });
   } catch (err) {
     Logger.log('handleLookupProduct ERROR: ' + err.message);
