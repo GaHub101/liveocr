@@ -10,12 +10,12 @@ import {
   showLookupButton, setLookupModal, getLookupFormValues,
   showReorderButton, setReorderState,
   applyLookupSuggestion, setSuggestStatus,
-  showModeSelector, populateSupplierDropdown,
+  showModeSelector, populateSupplierDropdown, populateLocationDropdown,
   showStatusModal, getStatusModalValue, setStatusModalState,
 } from './ui.js';
 import {
   checkRef, lookupProduct, addProduct, getProductSuppliers, markReorder,
-  listSuppliers, listStatusValues, setOrderStatus,
+  listSuppliers, listLocations, listStatusValues, setOrderStatus,
 } from './prices.js';
 
 const video   = document.getElementById('video');
@@ -113,6 +113,7 @@ async function main() {
 
   // Lieferanten + Bestellstatus-Werte parallel laden (für Dropdowns)
   listSuppliers().then(names => populateSupplierDropdown(names));
+  listLocations().then(locs => populateLocationDropdown(locs));
   listStatusValues().then(values => { cachedStatusValues = values; });
 
   // Kamera starten

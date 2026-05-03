@@ -24,6 +24,7 @@ var LOG_SHEET                = 'OCR_Results';
 var USAGE_LOG_SHEET          = 'Nutzungslog';
 var SUPPLIERS_SHEET          = 'Lieferanten';
 var STATUS_SHEET             = 'Bestellstatus';
+var LAGERORT_SHEET           = 'Lagerort';
 var REF_COL                  = 6;   // Spalte F (1-based)
 var STATUS_COL               = 9;   // Spalte I, Bestellstatus (1-based)
 var ID_COL_INDEX             = 0;   // Spalte A (0-based)
@@ -103,6 +104,10 @@ function doPost(e) {
 
     if (payload.action === 'listStatusValues') {
       return handleListStatusValues();
+    }
+
+    if (payload.action === 'listLocations') {
+      return handleListLocations();
     }
 
     if (payload.action === 'setStatus') {
@@ -651,6 +656,26 @@ function handleListStatusValues() {
   }
   logUsage('listStatusValues', 'ok', 'count=' + values.length);
   return jsonResponse({ status: 'ok', values: values });
+}
+
+// ---------------------------------------------------------------------------
+// Lagerorte – Spalte A des "Lagerort"-Tabs
+// ---------------------------------------------------------------------------
+
+function handleListLocations() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LAGERORT_SHEET);
+  if (!sheet) {
+    logUsage('listLocations', 'error', 'Sheet "' + LAGERORT_SHEET + '" nicht gefunden');
+    return jsonResponse({ status: 'ok', locations: [] });
+  }
+  var data = sheet.getDataRange().getValues();
+  var locations = [];
+  for (var i = 1; i < data.length; i++) {
+    var loc = String(data[i][0] || '').trim();
+    if (loc) locations.push(loc);
+  }
+  logUsage('listLocations', 'ok', 'count=' + locations.length);
+  return jsonResponse({ status: 'ok', locations: locations });
 }
 
 // ---------------------------------------------------------------------------

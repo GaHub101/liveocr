@@ -339,7 +339,7 @@
     }
 
     #lookup-cancel-btn  { background: #334155; flex: 1; }
-    #lookup-confirm-btn { background: #1e40af; flex: 2; }
+    #lookup-confirm-btn { background: #1e40af; flex: 1; }
     #lookup-confirm-btn:disabled { opacity: 0.4; cursor: default; }
 
     #lk-suggest-btn {
@@ -646,16 +646,11 @@
         <label>Artikelname *<input id="lk-name" type="text" required></label>
         <label>Kategorie<input id="lk-cat" type="text"></label>
         <label>Hauptlieferant<select id="lk-sup"><option value="">– bitte wählen –</option></select></label>
-        <label>Alt. Lieferant 1<input id="lk-alt1" type="text"></label>
-        <label>Alt. Lieferant 2<input id="lk-alt2" type="text"></label>
-        <label>Alt. Lieferant 3<input id="lk-alt3" type="text"></label>
-        <label>Alt. Lieferant 4<input id="lk-alt4" type="text"></label>
-        <label>Artikelcode<input id="lk-code" type="text"></label>
-        <label>Lagerort<input id="lk-loc" type="text"></label>
+        <label>Lagerort<select id="lk-loc"><option value="">– bitte wählen –</option></select></label>
       </div>
       <div id="lookup-actions">
-        <button id="lookup-cancel-btn">Abbrechen</button>
-        <button id="lookup-confirm-btn" style="display:none">Bestätigen</button>
+        <button id="lookup-cancel-btn" class="btn-secondary">Abbrechen</button>
+        <button id="lookup-confirm-btn" class="btn-primary" style="display:none">Bestätigen</button>
       </div>
     </div>
   </div>

@@ -148,7 +148,7 @@ export function setLookupModal(state, ref, suggestion) {
 
   if (state === 'form') {
     // Modal öffnet leer; Hersteller wird vom Nutzer eingegeben, Vorschlag dann via Button geladen
-    ['lk-name','lk-hersteller','lk-cat','lk-sup','lk-alt1','lk-alt2','lk-alt3','lk-alt4','lk-code','lk-loc']
+    ['lk-name','lk-hersteller','lk-cat','lk-sup','lk-loc']
       .forEach(id => { document.getElementById(id).value = ''; });
     const status = document.getElementById('lk-suggest-status');
     if (status) status.textContent = '';
@@ -165,11 +165,6 @@ export function applyLookupSuggestion(suggestion) {
   if (s.hersteller)  document.getElementById('lk-hersteller').value = s.hersteller;
   if (s.artikelname) document.getElementById('lk-name').value       = s.artikelname;
   if (s.kategorie)   document.getElementById('lk-cat').value        = s.kategorie;
-  // Hauptlieferant (lk-sup) bleibt leer — manuelle Auswahl im Sheet
-  document.getElementById('lk-alt1').value = alts[0] || '';
-  document.getElementById('lk-alt2').value = alts[1] || '';
-  document.getElementById('lk-alt3').value = alts[2] || '';
-  document.getElementById('lk-alt4').value = alts[3] || '';
 }
 
 export function setSuggestStatus(msg, state = 'idle') {
@@ -188,11 +183,6 @@ export function getLookupFormValues() {
     hersteller:     document.getElementById('lk-hersteller').value.trim(),
     category:       document.getElementById('lk-cat').value.trim(),
     hauptlieferant: document.getElementById('lk-sup').value.trim(),
-    alt1:           document.getElementById('lk-alt1').value.trim(),
-    alt2:           document.getElementById('lk-alt2').value.trim(),
-    alt3:           document.getElementById('lk-alt3').value.trim(),
-    alt4:           document.getElementById('lk-alt4').value.trim(),
-    articleCode:    document.getElementById('lk-code').value.trim(),
     location:       document.getElementById('lk-loc').value.trim(),
   };
 }
@@ -217,6 +207,15 @@ export function showModeSelector(visible) {
   const panel = document.getElementById('result-panel');
   if (cam)   cam.style.display   = visible ? 'none' : '';
   if (panel) panel.style.display = visible ? 'none' : '';
+}
+
+export function populateLocationDropdown(locations) {
+  const sel = document.getElementById('lk-loc');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">– bitte wählen –</option>'
+    + locations.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  if (current && locations.includes(current)) sel.value = current;
 }
 
 // Hauptlieferant-Dropdown im "Neues Produkt"-Modal mit Lieferantennamen befüllen

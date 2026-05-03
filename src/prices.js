@@ -76,6 +76,18 @@ export async function listSuppliers() {
   }
 }
 
+export async function listLocations() {
+  try {
+    const data = await post({ action: 'listLocations' });
+    const locs = data.locations || [];
+    log.info('prices', `listLocations: ${locs.length} Lagerorte`);
+    return locs;
+  } catch (err) {
+    log.warn('prices', `listLocations fehlgeschlagen: ${err.message}`);
+    return [];
+  }
+}
+
 export async function listStatusValues() {
   try {
     const data = await post({ action: 'listStatusValues' });
