@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, claude/live-ocr-planner-W2hDV, claude/remove-blue-line-sAaFF]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
