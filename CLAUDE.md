@@ -32,15 +32,18 @@ Camera (getUserMedia, rear-facing)
   → canvas.js  – crop to scan zone (80%×60%, centred), 20 px white padding, colour image
   → ocr.js     – Gemini 2.5 Flash via Apps Script webhook; canvas frame → base64-JPEG → POST
 
-?id= mode (write):
+?id= mode (write + reorder):
   → main.js    – user clicks "REF-Nr. hinzufügen"
   → send.js    – fetch() POST → Apps Script writeRef(); offline: localStorage queue, flushed on reconnect
+  → main.js    – on success: markReorder() sets column I (Bestellstatus) to "Nachbestellen"
 
 Standalone mode (no ?id=):
-  → main.js    – after scan: checkRef() → shows "Neues Produkt anlegen" button only if REF not in sheet
-  → main.js    – user clicks button → lookupProduct() (Gemini suggestion) → modal form
-  → main.js    – user confirms → addProduct() → Apps Script writes new row to Bestellungen
-  → send.js    – "REF-Nr. hinzufügen" still available: appends to OCR_Results log
+  → main.js    – mode-selector ("Was möchten Sie tun?") with three options A / B / C
+  → A) Produkt hinzufügen   – scan → lookupProduct() → modal with supplier dropdown → addProduct()
+  → B) Produkt suchen       – scan → checkRef() → on hit: status modal (values from Bestellstatus tab) → setStatus()
+                                                  on miss: "Neues Produkt anlegen" button (falls back to A)
+  → C) Nachbestellen        – scan → checkRef() → supplier links + "Nachbestellen" button → markReorder()
+  → send.js    – appendLog: every scan logged to OCR_Results
 ```
 
 ### Source modules
@@ -51,10 +54,10 @@ Standalone mode (no ?id=):
 | `src/canvas.js` | Crop to scan zone (80%×60%, centred) + 20 px white padding. Sends colour image directly to Gemini – no grayscale or binarisation. |
 | `src/ocr.js` | Gemini 2.5 Flash via Apps Script webhook. Canvas frame → downscaled 50 % → JPEG (q0.7) → base64 → POST. Prompt is hardcoded server-side. |
 | `src/send.js` | `fetch()` without `Content-Type` header (simple request, no CORS preflight). Offline queue in `localStorage` (`ocr_send_queue`), auto-flush on `online` event |
-| `src/prices.js` | `checkRef`, `lookupProduct`, `addProduct`, `getProductSuppliers` – all POST to Apps Script |
+| `src/prices.js` | `checkRef`, `lookupProduct`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setOrderStatus` – all POST to Apps Script |
 | `src/logger.js` | Ring-buffer log, max. 300 entries, `localStorage`. Debug overlay via `?debug` URL param |
-| `src/ui.js` | DOM updates: status, result, banner, queue badge, supplier links, lookup modal |
-| `src/main.js` | Entry point. URL params: `?id=` (write mode), `?name=` (banner), `?mode=search` (stub), `?debug` |
+| `src/ui.js` | DOM updates: status, result, banner, queue badge, supplier links, lookup modal, mode-selector, status modal, supplier dropdown |
+| `src/main.js` | Entry point. URL params: `?id=` (write+reorder), `?name=` (banner), `?debug`. Standalone shows mode-selector first; selected mode (`add`/`search`/`reorder`) branches the post-scan flow. |
 | `apps-script/Code.gs` | Google Apps Script webhook. Actions: `ocr`, `checkRef`/`search`, `lookupProduct`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setStatus`, `writeRef` (id present), `appendLog` (standalone) |
 
 ### OCR configuration
@@ -124,7 +127,7 @@ Log sources:
 | `canvas` | Scan-zone dimensions on first frame (once only) |
 | `ocr` | Gemini mode, ping HTTP status, image encode time, network time, recognised ref, no-ref, API errors |
 | `send` | Online state + payload summary, HTTP response status, Apps Script error responses, queue enqueue/flush |
-| `prices` | checkRef status, lookupProduct suggestion yes/no, addProduct call + success, supplier count |
+| `prices` | checkRef status, lookupProduct suggestion yes/no, addProduct call + success, supplier count, markReorder/setStatus result, listSuppliers/listStatusValues counts |
 
 The first `[INFO] canvas:` entry confirms the crop is active:
 ```
