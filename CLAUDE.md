@@ -55,7 +55,7 @@ Standalone mode (no ?id=):
 | `src/logger.js` | Ring-buffer log, max. 300 entries, `localStorage`. Debug overlay via `?debug` URL param |
 | `src/ui.js` | DOM updates: status, result, banner, queue badge, supplier links, lookup modal |
 | `src/main.js` | Entry point. URL params: `?id=` (write mode), `?name=` (banner), `?mode=search` (stub), `?debug` |
-| `apps-script/Code.gs` | Google Apps Script webhook. Actions: `ocr`, `checkRef`/`search`, `lookupProduct`, `addProduct`, `getProductSuppliers`, `writeRef` (id present), `appendLog` (standalone) |
+| `apps-script/Code.gs` | Google Apps Script webhook. Actions: `ocr`, `checkRef`/`search`, `lookupProduct`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setStatus`, `writeRef` (id present), `appendLog` (standalone) |
 
 ### OCR configuration
 
@@ -71,10 +71,9 @@ Gemini 2.5 Flash (via Apps Script webhook `handleGeminiOcr`):
 
 | URL params | Behaviour |
 |---|---|
-| *(none)* | Standalone: `checkRef` after scan; button shown only for new REFs; `appendLog` sends to `OCR_Results` |
-| `?id=N&name=...` | AppSheet mode: writes REF to column F of the row with matching ID in sheet `Bestellungen`; shows supplier links after scan |
+| *(none)* | Standalone: shows mode-selector ("Was möchten Sie tun?") with three options — A) Produkt hinzufügen, B) Produkt suchen, C) Nachbestellen. Scan flow branches on the selected mode. `appendLog` sends to `OCR_Results` on every scan. |
+| `?id=N&name=...` | AppSheet mode: skips mode-selector and runs Option C (Nachbestellen) automatically. Writes REF to column F of the matching row in `Bestellungen` AND sets column I (Bestellstatus) to "Nachbestellen". Shows supplier links after scan. |
 | `?debug` | Adds a log overlay (ring-buffer from localStorage, 300 entries). Combinable with other params. |
-| `?mode=search` | Stub only – not implemented yet (see TODO in `main.js`) |
 
 ### Google Apps Script (`apps-script/Code.gs`)
 
@@ -91,6 +90,14 @@ Sheet `Lieferanten` structure (URL lookup for supplier links):
 | Name | Such-URL |
 
 The `Such-URL` is a search base URL; the REF is appended URL-encoded. The `Name` must match exactly the text in columns E or N–Q of `Bestellungen`.
+
+Sheet `Bestellstatus` structure (values for Option B status dropdown):
+
+| A |
+|---|
+| Status |
+
+Column A from row 2 lists the allowed values for column I of `Bestellungen`. Header in row 1. The `setStatus` action validates incoming values against this list.
 
 Populate column A of `Bestellungen` with `=ROW()-1` from A2 downwards. IDs must not change. Deploy as Web App (Execute as: Me, Access: Anyone).
 

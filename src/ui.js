@@ -205,3 +205,53 @@ export function updateQueueBadge(count) {
     queueInfo.classList.remove('visible');
   }
 }
+
+// Mode-Selector (Wishlist Pkt. 1) – zeigt drei Optionen vor dem Scanmodus
+export function showModeSelector(visible) {
+  const sel = document.getElementById('mode-selector');
+  if (!sel) return;
+  sel.style.display = visible ? 'flex' : 'none';
+}
+
+// Hauptlieferant-Dropdown im "Neues Produkt"-Modal mit Lieferantennamen befüllen
+export function populateSupplierDropdown(suppliers) {
+  const sel = document.getElementById('lk-sup');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">– bitte wählen –</option>'
+    + suppliers.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  if (current && suppliers.includes(current)) sel.value = current;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// Bestellstatus-Modal (Option B – Produkt gefunden)
+export function showStatusModal(visible, statusValues) {
+  const backdrop = document.getElementById('status-backdrop');
+  if (!backdrop) return;
+  if (!visible) { backdrop.style.display = 'none'; return; }
+  const sel = document.getElementById('status-select');
+  if (sel && Array.isArray(statusValues)) {
+    sel.innerHTML = statusValues.length === 0
+      ? '<option value="">Keine Werte verfügbar</option>'
+      : statusValues.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  }
+  backdrop.style.display = 'flex';
+  setStatusModalState('idle');
+}
+
+export function getStatusModalValue() {
+  const sel = document.getElementById('status-select');
+  return sel ? sel.value : '';
+}
+
+export function setStatusModalState(state) {
+  const btn = document.getElementById('status-confirm-btn');
+  if (!btn) return;
+  if (state === 'idle')        { btn.disabled = false; btn.textContent = 'Speichern'; }
+  else if (state === 'sending') { btn.disabled = true;  btn.textContent = 'Speichern…'; }
+  else if (state === 'sent')    { btn.disabled = true;  btn.textContent = 'Gespeichert ✓'; }
+  else if (state === 'error')   { btn.disabled = false; btn.textContent = 'Fehler – Erneut versuchen'; }
+}

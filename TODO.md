@@ -2,16 +2,6 @@
 
 ## Offen
 
-### Search-Modus implementieren
-Der Scanner kann aktuell nur schreiben (REF einem bekannten Produkt zuweisen) oder ein neues Produkt anlegen. Ein Such-Modus, der ein unbekanntes Etikett scannt und das passende **bestehende** Produkt findet, ist technisch vorbereitet aber nicht aktiv.
-
-**Was fehlt:**
-- `?mode=search` in `src/main.js` aktivieren (TODO-Kommentar vorhanden)
-- `searchByRef()` in `apps-script/Code.gs` ist bereits aktiv; hier UI und Aufruf in `main.js` ergänzen
-- UI für Suchergebnis (Produktname + ID anzeigen)
-
----
-
 ### Barcode / QR-Code-Unterstützung
 Die App erkennt gedruckten Text per OCR (Gemini). Barcodes und QR-Codes werden nicht unterstützt. Eine Erweiterung wäre mit der [BarcodeDetector Web API](https://developer.mozilla.org/en-US/docs/Web/API/BarcodeDetector) möglich (Android Chrome unterstützt sie).
 
@@ -40,3 +30,4 @@ Der Webhook ist durch ein Shared Secret geschützt, hat aber kein serverseitiges
 - [x] Blauer animierter Scan-Strich entfernt (CSS `#scan-line` + `@keyframes scan` + HTML-Element)
 - [x] Debug-Logging auf alle Module ausgeweitet (`camera`, `ocr`, `send`, `prices`, `main`); HTTP-Status, Timings, Payload-Details
 - [x] Debug-Overlay: Level-Filter (ALL / WARN+ / ERROR), Refresh 2 s → 500 ms
+- [x] Mode-Selector (Wishlist Pkt. 1): „Was möchten Sie tun?" mit Optionen A (Hinzufügen), B (Suchen + Bestellstatus-Dropdown), C (Nachbestellen). Hauptlieferant im „Neues Produkt"-Modal als Dropdown. `?id=` löst automatisch Option C aus und setzt zusätzlich Bestellstatus auf „Nachbestellen". Neue Apps-Script-Actions: `listSuppliers`, `listStatusValues`, `setStatus`. Neuer Sheet-Tab `Bestellstatus` (Spalte A = erlaubte Werte).

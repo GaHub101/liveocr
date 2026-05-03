@@ -10,8 +10,13 @@ import {
   showLookupButton, setLookupModal, getLookupFormValues,
   showReorderButton, setReorderState,
   applyLookupSuggestion, setSuggestStatus,
+  showModeSelector, populateSupplierDropdown,
+  showStatusModal, getStatusModalValue, setStatusModalState,
 } from './ui.js';
-import { checkRef, lookupProduct, addProduct, getProductSuppliers, markReorder } from './prices.js';
+import {
+  checkRef, lookupProduct, addProduct, getProductSuppliers, markReorder,
+  listSuppliers, listStatusValues, setOrderStatus,
+} from './prices.js';
 
 const video   = document.getElementById('video');
 const canvas  = document.getElementById('canvas');
@@ -21,26 +26,56 @@ const lookupBtn      = document.getElementById('lookup-btn');
 const reorderBtn     = document.getElementById('reorder-btn');
 const lookupConfirm  = document.getElementById('lookup-confirm-btn');
 const lookupCancel   = document.getElementById('lookup-cancel-btn');
+const statusConfirm  = document.getElementById('status-confirm-btn');
+const statusCancel   = document.getElementById('status-cancel-btn');
+const modeAddBtn     = document.getElementById('mode-add');
+const modeSearchBtn  = document.getElementById('mode-search');
+const modeReorderBtn = document.getElementById('mode-reorder');
 
 // URL-Parameter auslesen
 const params      = new URLSearchParams(location.search);
 const productId   = params.get('id');    // numerische ID aus dem Sheet – Pflichtfeld für Write-Modus
 const productName = params.get('name');  // Artikelname, nur für Anzeige
-const mode        = params.get('mode');  // 'search' für späteren Such-Modus
+
+// userMode: 'add' | 'search' | 'reorder' | null
+// ?id= setzt automatisch Reorder-Modus (Wishlist Pkt. 1, Z. 9)
+let userMode = productId ? 'reorder' : null;
 
 let lastText            = '';
 let lastConfidence      = 0;
 let cachedSuppliers     = [];
-let lastFoundProductId  = null;  // Standalone-Modus: ID der zuletzt im Sheet gefundenen REF
+let lastFoundProductId  = null;  // ID der zuletzt im Sheet gefundenen REF
+let cachedStatusValues  = [];
 
-async function handleStandaloneScan(text, confidence) {
-  // OCR_Results-Logging: bei jedem erfolgreichen Scan, unabhängig vom Treffer-Status
+async function handleAddMode(text) {
+  // Option A: direkt Lookup-Modal öffnen, Hauptlieferant aus Dropdown wählbar
+  setLookupModal('form', text, null);
+}
+
+async function handleSearchMode(text, confidence) {
+  // Option B: REF im Sheet suchen
   sendOrQueue(
-    {
-      ref: text,
-      confidence: Math.round(confidence),
-      timestamp: new Date().toISOString(),
-    },
+    { ref: text, confidence: Math.round(confidence), timestamp: new Date().toISOString() },
+    updateQueueBadge,
+  ).catch((err) => log.warn('main', `Auto-Log fehlgeschlagen: ${err.message}`));
+
+  const result = await checkRef(text);
+  if (result.status === 'ok') {
+    // Treffer → Bestellstatus-Dropdown anzeigen
+    lastFoundProductId = result.id;
+    showStatusModal(true, cachedStatusValues);
+  } else {
+    // Kein Treffer → Option zum Hinzufügen
+    lastFoundProductId = null;
+    showLookupButton(true);
+    setStatus('REF nicht gefunden – als neues Produkt anlegen?', 'ready');
+  }
+}
+
+async function handleReorderMode(text, confidence) {
+  // Option C: Lieferantenliste mit Hauptlieferant hervorgehoben + Reorder-Button
+  sendOrQueue(
+    { ref: text, confidence: Math.round(confidence), timestamp: new Date().toISOString() },
     updateQueueBadge,
   ).catch((err) => log.warn('main', `Auto-Log fehlgeschlagen: ${err.message}`));
 
@@ -48,34 +83,37 @@ async function handleStandaloneScan(text, confidence) {
   if (result.status === 'ok') {
     lastFoundProductId = result.id;
     const suppliers = await getProductSuppliers(result.id);
-    showSupplierLinks(suppliers, text);   // Option 1.1
-    showReorderButton(true);              // Option 1.2
+    showSupplierLinks(suppliers, text);
+    showReorderButton(true);
     showLookupButton(false);
   } else {
     lastFoundProductId = null;
     showSupplierLinks([], text);
     showReorderButton(false);
-    showLookupButton(result.status === 'not_found');  // Option 2.1
+    showLookupButton(result.status === 'not_found');
   }
 }
 
 async function main() {
-  // Search-Modus: Schnittstelle vorbereitet, noch nicht aktiv
-  if (mode === 'search') {
-    // TODO: Search-Modus – OCR-Ergebnis gegen Sheet abfragen und Produkt anzeigen
-    // Aktivierung: searchByRef() in Code.gs ist bereit; hier UI und Aufruf ergänzen
-    setStatus('Search-Modus noch nicht aktiv', 'error');
-    hideLoading();
-    return;
-  }
-
   // Produkt-Banner anzeigen wenn aus AppSheet mit ?id= geöffnet
   if (productId) {
     showProductBanner(productName, productId);
     getProductSuppliers(productId).then(s => { cachedSuppliers = s; });
   }
 
-  log.info('main', `App gestartet – mode=${mode ?? 'standalone'}, id=${productId ?? '–'}`);
+  log.info('main', `App gestartet – id=${productId ?? '–'}, userMode=${userMode ?? 'pending'}`);
+
+  // Standalone: Mode-Selector anzeigen, Auswahl abwarten
+  if (!productId) {
+    showModeSelector(true);
+    modeAddBtn.addEventListener('click',     () => selectMode('add'));
+    modeSearchBtn.addEventListener('click',  () => selectMode('search'));
+    modeReorderBtn.addEventListener('click', () => selectMode('reorder'));
+  }
+
+  // Lieferanten + Bestellstatus-Werte parallel laden (für Dropdowns)
+  listSuppliers().then(names => populateSupplierDropdown(names));
+  listStatusValues().then(values => { cachedStatusValues = values; });
 
   // Kamera starten
   setLoadingMessage('Kamera wird gestartet…', 10);
@@ -101,14 +139,13 @@ async function main() {
   }
   requestAnimationFrame(loop);
 
-  // Standalone-Modus: Modal-Handler registrieren
+  // Standalone-Modus: Modal- und Status-Handler registrieren
   if (!productId) {
     // "REF-Nr. hinzufügen" entfällt im Standalone-Modus – OCR_Results wird automatisch geloggt
     sendBtn.style.display = 'none';
 
     lookupBtn.addEventListener('click', () => {
       if (!lastText) return;
-      // Modal direkt als leeres Formular öffnen — Hersteller wird manuell eingegeben
       setLookupModal('form', lastText, null);
     });
     lookupCancel.addEventListener('click', () => setLookupModal('hidden'));
@@ -170,11 +207,34 @@ async function main() {
         setStatus(`Fehler: ${result?.message || 'Speichern fehlgeschlagen'}`, 'error');
       }
     });
+
+    // Status-Modal (Option B – Produkt gefunden)
+    statusCancel.addEventListener('click', () => showStatusModal(false));
+    statusConfirm.addEventListener('click', async () => {
+      if (!lastFoundProductId) return;
+      const value = getStatusModalValue();
+      if (!value) return;
+      setStatusModalState('sending');
+      setStatus('Speichern…', 'working');
+      const result = await setOrderStatus(lastFoundProductId, value);
+      if (result?.status === 'ok') {
+        setStatusModalState('sent');
+        setStatus(`Status gesetzt: ${value} ✓`, 'ready');
+        setTimeout(() => showStatusModal(false), 800);
+      } else {
+        setStatusModalState('error');
+        setStatus(`Fehler: ${result?.message || 'Speichern fehlgeschlagen'}`, 'error');
+      }
+    });
   }
 
   // Scan-Button
   scanBtn.addEventListener('click', async () => {
-    log.info('main', 'Scan ausgelöst');
+    if (!productId && !userMode) {
+      setStatus('Bitte zuerst eine Aktion wählen', 'error');
+      return;
+    }
+    log.info('main', `Scan ausgelöst – mode=${userMode ?? 'id'}`);
     if (!preprocessFrame(video, canvas)) {
       log.warn('main', 'Scan abgebrochen – kein Video-Frame verfügbar');
       return;
@@ -189,6 +249,7 @@ async function main() {
     setReorderState('idle');
     lastFoundProductId = null;
     setLookupModal('hidden');
+    showStatusModal(false);
     await scheduleRecognition(canvas, (text, confidence) => {
       log.info('main', `OCR-Ergebnis: "${text || '–'}", Konfidenz=${confidence}%`);
       lastText       = text;
@@ -197,9 +258,14 @@ async function main() {
       setStatus('Erkannt', 'ready');
       if (text) {
         if (productId) {
+          // ?id= → Lieferantenliste anzeigen, Reorder erfolgt nach Send-Klick
           showSupplierLinks(cachedSuppliers, text);
-        } else {
-          handleStandaloneScan(text, confidence);
+        } else if (userMode === 'add') {
+          handleAddMode(text);
+        } else if (userMode === 'search') {
+          handleSearchMode(text, confidence);
+        } else if (userMode === 'reorder') {
+          handleReorderMode(text, confidence);
         }
       }
     });
@@ -231,6 +297,13 @@ async function main() {
         setSendState(navigator.onLine ? 'sent' : 'queued');
         setStatus(navigator.onLine ? 'Hinzugefügt' : 'Offline – in Warteschlange', navigator.onLine ? 'ready' : 'offline');
       }
+      // Wishlist Pkt. 1 Z. 9: ?id= → automatisch Bestellstatus auf "Nachbestellen" setzen
+      if (productId && navigator.onLine && result?.status === 'ok') {
+        markReorder(productId).then(r => {
+          if (r?.status === 'ok') log.info('main', `?id=-Modus: Bestellstatus auf Nachbestellen gesetzt für id=${productId}`);
+          else                    log.warn('main', `?id=-Modus: markReorder fehlgeschlagen – ${r?.message || 'unbekannt'}`);
+        });
+      }
     } catch (err) {
       log.error('main', 'Senden fehlgeschlagen', err);
       setSendState('error');
@@ -256,6 +329,20 @@ async function main() {
     setStatus('Offline', 'offline');
     updateQueueBadge(getQueueLength());
   });
+}
+
+function selectMode(mode) {
+  userMode = mode;
+  log.info('main', `Mode gewählt: ${mode}`);
+  showModeSelector(false);
+  setStatus(`Modus: ${modeLabel(mode)} – jetzt scannen`, 'ready');
+}
+
+function modeLabel(m) {
+  if (m === 'add')     return 'Produkt hinzufügen';
+  if (m === 'search')  return 'Produkt suchen';
+  if (m === 'reorder') return 'Nachbestellen';
+  return m;
 }
 
 main().catch((err) => {
