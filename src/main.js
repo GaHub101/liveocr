@@ -118,6 +118,11 @@ async function main() {
     const searchRefInput   = document.getElementById('search-ref-input');
     const searchConfirmBtn = document.getElementById('search-confirm-btn');
 
+    const modeBtnLabels = { add: 'Weiter', search: 'Suchen', reorder: 'Bestellen' };
+    function resetToEditField() {
+      showSearchRefInput(true, '', modeBtnLabels[userMode] || 'Weiter');
+    }
+
     searchConfirmBtn.addEventListener('click', async () => {
       const ref = searchRefInput.value.trim();
       if (!ref) return;
@@ -177,7 +182,7 @@ async function main() {
       showLookupButton(false);
       setLookupModal('form', ref, null);
     });
-    lookupCancel.addEventListener('click', () => setLookupModal('hidden'));
+    lookupCancel.addEventListener('click', () => { setLookupModal('hidden'); resetToEditField(); });
 
     // "Vorschlag laden": Hersteller + REF an Gemini, befüllt Artikelname/Kategorie/Alt-Lieferanten
     const suggestBtn      = document.getElementById('lk-suggest-btn');
@@ -220,6 +225,7 @@ async function main() {
         setLookupModal('hidden');
         setStatus('Produkt angelegt ✓', 'ready');
         showLookupButton(false);
+        resetToEditField();
       } catch (err) {
         log.error('main', 'addProduct fehlgeschlagen', err);
         setStatus(`Fehler: ${err.message}`, 'error');
@@ -241,10 +247,11 @@ async function main() {
         setReorderState('error');
         setStatus(`Fehler: ${result?.message || 'Speichern fehlgeschlagen'}`, 'error');
       }
+      resetToEditField();
     });
 
     // Status-Modal (Option B – Produkt gefunden)
-    statusCancel.addEventListener('click', () => showStatusModal(false));
+    statusCancel.addEventListener('click', () => { showStatusModal(false); resetToEditField(); });
     statusConfirm.addEventListener('click', async () => {
       if (!lastFoundProductId) return;
       const value = getStatusModalValue();
@@ -255,7 +262,7 @@ async function main() {
       if (result?.status === 'ok') {
         setStatusModalState('sent');
         setStatus(`Status gesetzt: ${value} ✓`, 'ready');
-        setTimeout(() => showStatusModal(false), 800);
+        setTimeout(() => { showStatusModal(false); resetToEditField(); }, 800);
       } else {
         setStatusModalState('error');
         setStatus(`Fehler: ${result?.message || 'Speichern fehlgeschlagen'}`, 'error');
