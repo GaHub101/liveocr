@@ -211,6 +211,12 @@ export function showModeSelector(visible) {
   const sel = document.getElementById('mode-selector');
   if (!sel) return;
   sel.style.display = visible ? 'flex' : 'none';
+
+  // Kamera + Ergebnis-Panel ausblenden, solange noch keine Aktion gewählt ist
+  const cam   = document.getElementById('camera-container');
+  const panel = document.getElementById('result-panel');
+  if (cam)   cam.style.display   = visible ? 'none' : '';
+  if (panel) panel.style.display = visible ? 'none' : '';
 }
 
 // Hauptlieferant-Dropdown im "Neues Produkt"-Modal mit Lieferantennamen befüllen
