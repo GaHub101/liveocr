@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, claude/plan-wishlist-lines-5pu44]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
