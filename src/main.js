@@ -157,8 +157,8 @@ async function main() {
           lastFoundProductId = null;
           showSupplierLinks([], ref);
           showReorderButton(false);
-          showLookupButton(result.status === 'not_found');
-          setStatus('REF nicht gefunden', 'ready');
+          showLookupButton(true);
+          setStatus('REF nicht gefunden – als neues Produkt anlegen?', 'ready');
         }
         return;
       }
