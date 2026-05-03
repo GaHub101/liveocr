@@ -162,7 +162,7 @@
       margin-top: 4px;
     }
 
-    #scan-btn, #send-btn {
+    #scan-btn, #send-btn, #lookup-btn, #search-confirm-btn {
       width: 100%;
       padding: 16px;
       color: #fff;
@@ -173,6 +173,21 @@
       cursor: pointer;
       transition: background 0.2s, opacity 0.2s;
       -webkit-tap-highlight-color: transparent;
+    }
+
+    #lookup-btn       { background: #3b82f6; }
+    #search-confirm-btn { background: #1e40af; margin-bottom: 4px; }
+
+    #search-ref-input {
+      width: 100%;
+      box-sizing: border-box;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #f1f5f9;
+      padding: 12px;
+      font-size: 1rem;
+      margin-bottom: 6px;
     }
 
     #scan-btn {
@@ -298,10 +313,23 @@
       margin-bottom: 6px;
     }
 
-    #lookup-ref-line {
+    .ref-label {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
       font-size: 12px;
       color: #64748b;
       margin-bottom: 12px;
+    }
+
+    .ref-label input {
+      background: #0f172a;
+      border: 1px solid #1e40af;
+      border-radius: 4px;
+      color: #f1f5f9;
+      padding: 7px 10px;
+      font-size: 14px;
+      width: 100%;
     }
 
     #lookup-loading {
@@ -338,8 +366,17 @@
       margin-top: 12px;
     }
 
-    #lookup-cancel-btn  { background: #334155; flex: 1; }
-    #lookup-confirm-btn { background: #1e40af; flex: 1; }
+    #lookup-cancel-btn, #lookup-confirm-btn {
+      padding: 6px 12px;
+      font-size: 13px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      color: #fff;
+      flex: 1;
+    }
+    #lookup-cancel-btn  { background: #991b1b; }
+    #lookup-confirm-btn { background: #15803d; }
     #lookup-confirm-btn:disabled { opacity: 0.4; cursor: default; }
 
     #lk-suggest-btn {
@@ -627,6 +664,8 @@
     <button id="scan-btn">Scannen</button>
     <button id="send-btn" disabled>REF-Nr. hinzufügen</button>
     <button id="reorder-btn" style="display:none">Nachbestellen</button>
+    <input id="search-ref-input" type="text" style="display:none" placeholder="REF prüfen/korrigieren">
+    <button id="search-confirm-btn" style="display:none">Suchen</button>
     <button id="lookup-btn" style="display:none">Neues Produkt anlegen</button>
     <div id="queue-info"></div>
     <div id="avail-panel" style="display:none">
@@ -637,16 +676,18 @@
   <div id="lookup-backdrop" style="display:none">
     <div id="lookup-modal">
       <div class="lookup-title">Neues Produkt bestätigen</div>
-      <div id="lookup-ref-line"></div>
+      <label class="ref-label">REF-Nr. *<input id="lk-ref" type="text"></label>
       <div id="lookup-loading">Suche läuft…</div>
       <div id="lookup-form" style="display:none">
         <label>Suchbegriff *<input id="lk-hersteller" type="text" placeholder="z.B. Hersteller, Produktbeschreibung"></label>
         <button id="lk-suggest-btn" type="button">Vorschlag laden</button>
         <div id="lk-suggest-status"></div>
+        <label>Hersteller<input id="lk-manu" type="text"></label>
         <label>Artikelname *<input id="lk-name" type="text" required></label>
         <label>Kategorie<input id="lk-cat" type="text"></label>
         <label>Hauptlieferant<select id="lk-sup"><option value="">– bitte wählen –</option></select></label>
         <label>Lagerort<select id="lk-loc"><option value="">– bitte wählen –</option></select></label>
+        <label>Bestellstatus<select id="lk-status"><option value="">– bitte wählen –</option></select></label>
       </div>
       <div id="lookup-actions">
         <button id="lookup-cancel-btn" class="btn-secondary">Abbrechen</button>

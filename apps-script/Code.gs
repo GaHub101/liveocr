@@ -510,7 +510,7 @@ function handleAddProduct(payload) {
       ref,                                   // F: REF-Nummer
       String(payload.articleCode    || ''),  // G: Artikelcode
       String(payload.location       || ''),  // H: Lagerort
-      'Nachbestellen',                        // I: Bestellstatus
+      String(payload.orderStatus || 'Nachbestellen'),  // I: Bestellstatus
       '', '', '', '',                         // J–M: leer
       String(payload.alt1 || ''),            // N: Alt. Lieferant 1
       String(payload.alt2 || ''),            // O: Alt. Lieferant 2

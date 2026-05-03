@@ -137,18 +137,17 @@ export function setLookupModal(state, ref, suggestion) {
   const loading    = document.getElementById('lookup-loading');
   const form       = document.getElementById('lookup-form');
   const confirmBtn = document.getElementById('lookup-confirm-btn');
-  const refLine    = document.getElementById('lookup-ref-line');
 
   if (state === 'hidden') { backdrop.style.display = 'none'; return; }
   backdrop.style.display = 'flex';
-  if (ref) refLine.textContent = 'REF: ' + ref;
+  const refInput = document.getElementById('lk-ref');
+  if (refInput) refInput.value = ref || '';
   loading.style.display    = state === 'loading' ? 'block' : 'none';
   form.style.display       = state === 'form'    ? 'block' : 'none';
   confirmBtn.style.display = state === 'form'    ? 'inline-block' : 'none';
 
   if (state === 'form') {
-    // Modal öffnet leer; Hersteller wird vom Nutzer eingegeben, Vorschlag dann via Button geladen
-    ['lk-name','lk-hersteller','lk-cat','lk-sup','lk-loc']
+    ['lk-name','lk-hersteller','lk-manu','lk-cat','lk-sup','lk-loc','lk-status']
       .forEach(id => { document.getElementById(id).value = ''; });
     const status = document.getElementById('lk-suggest-status');
     if (status) status.textContent = '';
@@ -159,12 +158,17 @@ export function setLookupModal(state, ref, suggestion) {
 }
 
 export function applyLookupSuggestion(suggestion) {
-  const s    = suggestion || {};
-  const alts = Array.isArray(s.alt_lieferanten) ? s.alt_lieferanten : [];
-  // Suchbegriff-Feld (lk-hersteller) wird mit dem von Gemini bestätigten offiziellen Hersteller überschrieben
-  if (s.hersteller)  document.getElementById('lk-hersteller').value = s.hersteller;
-  if (s.artikelname) document.getElementById('lk-name').value       = s.artikelname;
-  if (s.kategorie)   document.getElementById('lk-cat').value        = s.kategorie;
+  const s = suggestion || {};
+  if (s.hersteller)  document.getElementById('lk-manu').value = s.hersteller;
+  if (s.artikelname) document.getElementById('lk-name').value = s.artikelname;
+  if (s.kategorie)   document.getElementById('lk-cat').value  = s.kategorie;
+  // Herstellername aus Artikelname entfernen
+  const nameEl = document.getElementById('lk-name');
+  const manuEl = document.getElementById('lk-manu');
+  if (nameEl && manuEl && manuEl.value) {
+    const re = new RegExp(manuEl.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    nameEl.value = nameEl.value.replace(re, '').replace(/\s+/g, ' ').trim();
+  }
 }
 
 export function setSuggestStatus(msg, state = 'idle') {
@@ -179,11 +183,13 @@ export function setSuggestStatus(msg, state = 'idle') {
 
 export function getLookupFormValues() {
   return {
+    ref:            document.getElementById('lk-ref').value.trim(),
     name:           document.getElementById('lk-name').value.trim(),
-    hersteller:     document.getElementById('lk-hersteller').value.trim(),
+    hersteller:     document.getElementById('lk-manu').value.trim(),
     category:       document.getElementById('lk-cat').value.trim(),
     hauptlieferant: document.getElementById('lk-sup').value.trim(),
     location:       document.getElementById('lk-loc').value.trim(),
+    orderStatus:    document.getElementById('lk-status').value.trim(),
   };
 }
 
@@ -207,6 +213,20 @@ export function showModeSelector(visible) {
   const panel = document.getElementById('result-panel');
   if (cam)   cam.style.display   = visible ? 'none' : '';
   if (panel) panel.style.display = visible ? 'none' : '';
+}
+
+export function populateStatusDropdown(values) {
+  const sel = document.getElementById('lk-status');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">– bitte wählen –</option>'
+    + values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+}
+
+export function showSearchRefInput(show, prefillText = '') {
+  const inp = document.getElementById('search-ref-input');
+  const btn = document.getElementById('search-confirm-btn');
+  if (inp) { inp.style.display = show ? 'block' : 'none'; if (show) inp.value = prefillText; }
+  if (btn) btn.style.display = show ? 'block' : 'none';
 }
 
 export function populateLocationDropdown(locations) {

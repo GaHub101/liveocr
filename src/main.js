@@ -11,6 +11,7 @@ import {
   showReorderButton, setReorderState,
   applyLookupSuggestion, setSuggestStatus,
   showModeSelector, populateSupplierDropdown, populateLocationDropdown,
+  populateStatusDropdown, showSearchRefInput,
   showStatusModal, getStatusModalValue, setStatusModalState,
 } from './ui.js';
 import {
@@ -52,24 +53,10 @@ async function handleAddMode(text) {
   setLookupModal('form', text, null);
 }
 
-async function handleSearchMode(text, confidence) {
-  // Option B: REF im Sheet suchen
-  sendOrQueue(
-    { ref: text, confidence: Math.round(confidence), timestamp: new Date().toISOString() },
-    updateQueueBadge,
-  ).catch((err) => log.warn('main', `Auto-Log fehlgeschlagen: ${err.message}`));
-
-  const result = await checkRef(text);
-  if (result.status === 'ok') {
-    // Treffer → Bestellstatus-Dropdown anzeigen
-    lastFoundProductId = result.id;
-    showStatusModal(true, cachedStatusValues);
-  } else {
-    // Kein Treffer → Option zum Hinzufügen
-    lastFoundProductId = null;
-    showLookupButton(true);
-    setStatus('REF nicht gefunden – als neues Produkt anlegen?', 'ready');
-  }
+async function handleSearchMode(text) {
+  // Option B: REF-Nr. anzeigen, editierbar machen, Suche erst nach Bestätigung
+  showSearchRefInput(true, text);
+  setStatus('REF prüfen und "Suchen" klicken', 'ready');
 }
 
 async function handleReorderMode(text, confidence) {
@@ -114,7 +101,7 @@ async function main() {
   // Lieferanten + Bestellstatus-Werte parallel laden (für Dropdowns)
   listSuppliers().then(names => populateSupplierDropdown(names));
   listLocations().then(locs => populateLocationDropdown(locs));
-  listStatusValues().then(values => { cachedStatusValues = values; });
+  listStatusValues().then(values => { cachedStatusValues = values; populateStatusDropdown(values); });
 
   // Kamera starten
   setLoadingMessage('Kamera wird gestartet…', 10);
@@ -145,9 +132,38 @@ async function main() {
     // "REF-Nr. hinzufügen" entfällt im Standalone-Modus – OCR_Results wird automatisch geloggt
     sendBtn.style.display = 'none';
 
+    const searchRefInput   = document.getElementById('search-ref-input');
+    const searchConfirmBtn = document.getElementById('search-confirm-btn');
+
+    searchConfirmBtn.addEventListener('click', async () => {
+      const ref = searchRefInput.value.trim();
+      if (!ref) return;
+      searchConfirmBtn.disabled = true;
+      searchConfirmBtn.textContent = 'Suche…';
+      sendOrQueue(
+        { ref, confidence: Math.round(lastConfidence), timestamp: new Date().toISOString() },
+        updateQueueBadge,
+      ).catch((err) => log.warn('main', `Auto-Log fehlgeschlagen: ${err.message}`));
+      const result = await checkRef(ref);
+      searchConfirmBtn.disabled = false;
+      searchConfirmBtn.textContent = 'Suchen';
+      if (result.status === 'ok') {
+        lastFoundProductId = result.id;
+        showSearchRefInput(false);
+        showStatusModal(true, cachedStatusValues);
+      } else {
+        lastFoundProductId = null;
+        showLookupButton(true);
+        setStatus('REF nicht gefunden – als neues Produkt anlegen?', 'ready');
+      }
+    });
+
     lookupBtn.addEventListener('click', () => {
-      if (!lastText) return;
-      setLookupModal('form', lastText, null);
+      const ref = (searchRefInput && searchRefInput.value.trim()) || lastText;
+      if (!ref) return;
+      showSearchRefInput(false);
+      showLookupButton(false);
+      setLookupModal('form', ref, null);
     });
     lookupCancel.addEventListener('click', () => setLookupModal('hidden'));
 
@@ -162,7 +178,8 @@ async function main() {
         return;
       }
       setSuggestStatus('Lade Vorschlag…', 'loading');
-      const suggestion = await lookupProduct(lastText, hersteller);
+      const refForLookup = document.getElementById('lk-ref')?.value.trim() || lastText;
+      const suggestion = await lookupProduct(refForLookup, hersteller);
       applyLookupSuggestion(suggestion);
       const filled = [suggestion.hersteller, suggestion.artikelname, suggestion.kategorie].filter(Boolean).length;
       const altsN  = Array.isArray(suggestion.alt_lieferanten) ? suggestion.alt_lieferanten.length : 0;
@@ -179,10 +196,15 @@ async function main() {
     lookupConfirm.addEventListener('click', async () => {
       const vals = getLookupFormValues();
       if (!vals.name) { document.getElementById('lk-name').focus(); return; }
+      // Herstellername aus Artikelname entfernen (Sicherheitsnetz falls manuell eingefügt)
+      if (vals.hersteller) {
+        const re = new RegExp(vals.hersteller.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        vals.name = vals.name.replace(re, '').replace(/\s+/g, ' ').trim();
+      }
       lookupConfirm.disabled = true;
       lookupConfirm.textContent = 'Speichern…';
       try {
-        await addProduct({ ref: lastText, ...vals });
+        await addProduct(vals);
         setLookupModal('hidden');
         setStatus('Produkt angelegt ✓', 'ready');
         showLookupButton(false);
