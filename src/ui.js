@@ -222,11 +222,13 @@ export function populateStatusDropdown(values) {
     + values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
 }
 
-export function showSearchRefInput(show, prefillText = '') {
-  const inp = document.getElementById('search-ref-input');
-  const btn = document.getElementById('search-confirm-btn');
-  if (inp) { inp.style.display = show ? 'block' : 'none'; if (show) inp.value = prefillText; }
-  if (btn) btn.style.display = show ? 'block' : 'none';
+export function showSearchRefInput(show, prefillText = '', btnLabel = 'Suchen') {
+  const inp    = document.getElementById('search-ref-input');
+  const btn    = document.getElementById('search-confirm-btn');
+  const resBox = document.getElementById('result-box');
+  if (inp)    { inp.style.display = show ? 'block' : 'none'; if (show) inp.value = prefillText; }
+  if (btn)    { btn.style.display = show ? 'block' : 'none'; if (show) btn.textContent = btnLabel; }
+  if (resBox) resBox.style.display = show ? 'none' : '';
 }
 
 export function populateLocationDropdown(locations) {

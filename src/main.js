@@ -49,8 +49,8 @@ let lastFoundProductId  = null;  // ID der zuletzt im Sheet gefundenen REF
 let cachedStatusValues  = [];
 
 async function handleAddMode(text) {
-  // Option A: direkt Lookup-Modal öffnen, Hauptlieferant aus Dropdown wählbar
-  setLookupModal('form', text, null);
+  showSearchRefInput(true, text, 'Weiter');
+  setStatus('REF prüfen und "Weiter" klicken', 'ready');
 }
 
 async function handleSearchMode(text) {
@@ -138,6 +138,14 @@ async function main() {
     searchConfirmBtn.addEventListener('click', async () => {
       const ref = searchRefInput.value.trim();
       if (!ref) return;
+
+      if (userMode === 'add') {
+        showSearchRefInput(false);
+        setLookupModal('form', ref, null);
+        return;
+      }
+
+      // Such-Modus: checkRef
       searchConfirmBtn.disabled = true;
       searchConfirmBtn.textContent = 'Suche…';
       sendOrQueue(
