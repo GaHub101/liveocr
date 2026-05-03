@@ -1,9 +1,0 @@
-Umsetzungswunschliste
-
-1.
-Webapp wird im neutralen modus geöffnet. UI fragt "Was möchten sie tun?" mit 3 Optionen:
-A) Produkt der Datenbank hinzufügen. Bei Hinzufügen Auswahlmöglichkeiten des Hauptlieferanten unter den vorhandenen Lieferanten (Dropdown)
-B) Produkt in der Datenbank suchen: Wenn gefunden, dann Auswahlmöglichkeiten des Bestellstatus (Dropdown), wenn nicht gefunden, dann Option zum Hinzufügen (siehe Punkt A)
-C) Produkt Nachbestellen. Auswahl aller Lieferanten mit Hauptlieferant grafisch hervorgehoben.
-Bei Anwählen der Schaltflächen entsprechende Weiterleitung zum Scanmodus mit beschrienenen Funktionen.
-Wenn aber app im modus id= geöfdnet wird, wird immer Option C erfolgen.
