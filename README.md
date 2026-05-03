@@ -58,7 +58,7 @@ Damit der Scanner aus AppSheet heraus einem bestimmten Produkt zugewiesen werden
      ```
 4. Action auf dem gewünschten View hinzufügen
 
-Der Scanner zeigt dann ein blaues Banner „Produkt: [Artikelname]" und schreibt die erkannte REF-Nummer direkt in **Spalte F (REF-Nummer)** der entsprechenden Zeile. Nach dem Scan erscheinen außerdem „Öffnen →"-Links zu allen zugewiesenen Lieferanten des Produkts.
+Der Scanner zeigt dann ein blaues Banner „Produkt: [Artikelname]" und schreibt die erkannte REF-Nummer direkt in **Spalte F (REF-Nummer)** der entsprechenden Zeile. Zusätzlich wird **Spalte I (Bestellstatus)** automatisch auf `Nachbestellen` gesetzt. Nach dem Scan erscheinen außerdem „Öffnen →"-Links zu allen zugewiesenen Lieferanten des Produkts.
 
 ---
 
@@ -131,14 +131,17 @@ Browser (Android Chrome)
       │                     Farbbild direkt an Gemini – kein Graustufen-/Binarisierungs-Schritt
       ├── src/ocr.js      – Gemini 2.5 Flash via Apps Script Webhook; Frame als base64-JPEG
       ├── src/send.js     – fetch() + localStorage Offline-Queue (OCR_Results / writeRef)
-      ├── src/prices.js   – checkRef, lookupProduct, addProduct, getProductSuppliers
+      ├── src/prices.js   – checkRef, lookupProduct, addProduct, getProductSuppliers,
+      │                     markReorder, listSuppliers, listStatusValues, setOrderStatus
       ├── src/logger.js   – Ring-Buffer-Log (localStorage, 300 Einträge, ?debug-Overlay)
-      ├── src/ui.js       – DOM-Updates (Status, Ergebnis, Banner, Lieferanten-Links, Modal)
-      └── src/main.js     – Einstiegspunkt
+      ├── src/ui.js       – DOM-Updates (Status, Ergebnis, Banner, Lieferanten-Links, Modale,
+      │                     Mode-Selector, Status-Dropdown)
+      └── src/main.js     – Einstiegspunkt; Standalone zeigt zuerst Auswahldialog (A/B/C)
 
 Apps Script (Google)
   └── apps-script/Code.gs – doPost → ocr / checkRef / lookupProduct / addProduct /
-                             getProductSuppliers / writeRef (id) / appendLog (standalone)
+                             getProductSuppliers / markReorder / listSuppliers /
+                             listStatusValues / setStatus / writeRef (id) / appendLog (standalone)
 ```
 
 ## CORS-Hinweis

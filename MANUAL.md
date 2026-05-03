@@ -23,18 +23,18 @@ Eine Web-App, die auf Android-Geräten läuft, per Kamera Herstellerreferenzen v
 10. AppSheet liest das Sheet und zeigt die REF-Nummer sofort beim Produkt an
 11. Nach dem Scan erscheinen außerdem **„Öffnen →"-Links** zu allen Lieferanten, die für dieses Produkt eingetragen sind
 
-**Szenario B: Standalone-Modus – drei Optionen je nach Treffer-Status.**
+**Szenario B: Standalone-Modus – Auswahldialog mit drei Optionen.**
 
 1. Du öffnest die App direkt unter `https://deinname.github.io/liveocr` (ohne `?id=`)
-2. Du scannst das Etikett – Gemini erkennt die REF-Nummer; jeder Scan wird automatisch im Sheet `OCR_Results` protokolliert
-3. Die App gleicht die REF mit Spalte F (`REF-Nummer`) im Sheet `Bestellungen` ab und zeigt je nach Ergebnis eine von zwei Pfaden an:
+2. Statt der Kamera erscheint zuerst der Auswahldialog **„Was möchten Sie tun?"** mit drei Buttons:
 
-   **REF bereits vorhanden** – zwei Optionen:
-   - **Option 1.1 – Webshop öffnen:** Unter dem Ergebnis erscheinen alle Lieferanten des Produkts als „Öffnen →"-Links (Hauptlieferant mit Stern hervorgehoben). Ein Tipp öffnet die Such-URL des Lieferanten mit angehängter REF-Nummer in einem neuen Tab.
-   - **Option 1.2 – Nachbestellen:** Tippe den Button **„Nachbestellen"** – die App schreibt `Nachbestellen` in Spalte I (`Bestellstatus`) der entsprechenden Zeile.
+   - **A) Produkt hinzufügen** – Du willst ein neues Produkt anlegen. Klick → Kamera startet, Scan öffnet direkt das „Neues Produkt"-Formular mit Hauptlieferant-Dropdown (Werte aus dem `Lieferanten`-Tab).
+   - **B) Produkt suchen** – Du willst den Bestellstatus eines bestehenden Produkts ändern. Klick → Kamera startet, Scan gleicht REF gegen Spalte F (`REF-Nummer`) ab:
+     - **Treffer:** Es erscheint ein Auswahlfenster „Bestellstatus setzen" mit Dropdown der erlaubten Werte (aus dem `Bestellstatus`-Tab) – wähle einen Wert und bestätige, der Status wird in Spalte I geschrieben.
+     - **Kein Treffer:** Es erscheint der Button „Neues Produkt anlegen" → führt in Option A.
+   - **C) Produkt nachbestellen** – Du willst nachbestellen. Klick → Kamera startet, Scan zeigt alle Lieferanten des Produkts (Hauptlieferant gelb hervorgehoben mit Stern) und einen Button „Nachbestellen", der `Nachbestellen` in Spalte I schreibt.
 
-   **REF noch nicht vorhanden** – eine Option:
-   - **Option 2.1 – Neues Produkt anlegen:** Es erscheint der grüne Button **„Neues Produkt anlegen"**. Tipp drauf → die App fragt Gemini nach Artikelname, Hersteller und Kategorie. Ein Formular öffnet sich, vorausgefüllt mit dem Gemini-Vorschlag. Nach Bestätigung wird eine neue Zeile in `Bestellungen` angelegt.
+3. Jeder Scan wird unabhängig vom gewählten Modus im Sheet `OCR_Results` protokolliert.
 
 ---
 
@@ -47,10 +47,10 @@ Eine Web-App, die auf Android-Geräten läuft, per Kamera Herstellerreferenzen v
 | **`src/canvas.js`** | Schneidet den Scan-Rahmen (80 % × 60 %, zentriert) aus dem Kamerabild aus und sendet das **Farbbild** direkt an Gemini – keine Graustufen- oder Schwellwert-Verarbeitung |
 | **`src/ocr.js`** | Sendet das Kamerabild (50 % skaliert, JPEG q0.7) per POST an den Apps Script Webhook; Gemini 2.5 Flash erkennt die REF-Nummer serverseitig |
 | **`src/send.js`** | Sendet das Ergebnis per POST an Apps Script; wenn offline → speichert in `localStorage` und sendet automatisch wenn Netzwerk zurückkommt |
-| **`src/prices.js`** | `checkRef` (REF im Sheet vorhanden?), `lookupProduct` (Gemini-Vorschlag), `addProduct` (neue Zeile anlegen), `getProductSuppliers` (Lieferanten eines Produkts lesen) |
+| **`src/prices.js`** | `checkRef`, `lookupProduct`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setOrderStatus` (alle als POST an Apps Script) |
 | **`src/logger.js`** | Ring-Buffer-Log (max. 300 Einträge, `localStorage`). Wird von allen Modulen genutzt. Debug-Overlay via `?debug` in der URL |
-| **`src/main.js`** | Liest URL-Parameter (`?id=`, `?name=`, `?mode=`), steuert den gesamten Ablauf |
-| **`apps-script/Code.gs`** | Empfängt alle POSTs, führt je nach Action die entsprechende Sheet-Operation durch |
+| **`src/main.js`** | Liest URL-Parameter (`?id=`, `?name=`, `?debug`); im Standalone zeigt zuerst den Auswahldialog (A/B/C) und verzweigt danach den Scan-Flow |
+| **`apps-script/Code.gs`** | Empfängt alle POSTs (Actions: `ocr`, `checkRef`, `lookupProduct`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setStatus`, `writeRef`, `appendLog`), führt je nach Action die entsprechende Sheet-Operation durch |
 | **PWA** | App ist auf Android installierbar (Homescreen-Icon, läuft wie eine native App) |
 
 ---
@@ -172,32 +172,44 @@ Der Name muss exakt mit dem entsprechenden Eintrag im „Lieferanten"-Tab übere
 5. Der erkannte REF-Code erscheint in der Ergebnisbox, z.B. `OW-2241-A`
 6. Direkt darunter erscheinen **„Öffnen →"-Links** zu den Lieferanten des Produkts (sofern im Sheet eingetragen und im „Lieferanten"-Tab mit URL hinterlegt)
 7. Wenn der angezeigte Code korrekt ist, tippe auf **„REF-Nr. hinzufügen"**
-8. Der Code wird in **Spalte F (REF-Nummer)** des Produkts im Sheet gespeichert
+8. Der Code wird in **Spalte F (REF-Nummer)** des Produkts im Sheet gespeichert; zusätzlich wird **Spalte I (Bestellstatus)** automatisch auf `Nachbestellen` gesetzt
 
 ---
 
-### Standalone-Modus (drei Optionen)
+### Standalone-Modus (Auswahldialog mit drei Optionen)
 
 Du kannst den Scanner auch direkt unter `https://USERNAME.github.io/liveocr` öffnen – ohne `?id=` Parameter.
 
-1. Tippe auf **„Scannen"** und halte ein Etikett in den blauen Rahmen
-2. Jeder erkannte Scan wird automatisch im Sheet `OCR_Results` protokolliert (Timestamp, REF, Konfidenz)
-3. Die App gleicht die REF mit Spalte F im Sheet `Bestellungen` ab und zeigt eine der beiden Varianten:
+1. Statt der Kamera erscheint zuerst der Auswahldialog **„Was möchten Sie tun?"** mit drei Buttons. Erst nach deiner Auswahl wird die Kamera-Vorschau eingeblendet.
+2. Jeder erkannte Scan wird automatisch im Sheet `OCR_Results` protokolliert (Timestamp, REF, Konfidenz) – unabhängig vom gewählten Modus.
 
-   **REF bereits vorhanden** – zwei Optionen:
-   - **„Öffnen →"-Links** zu allen Lieferanten des Produkts; der Hauptlieferant ist mit einem Stern (★) und gelber Markierung hervorgehoben. Tipp öffnet die Such-URL des Lieferanten mit angehängter REF-Nummer in einem neuen Tab.
-   - Button **„Nachbestellen"** – schreibt `Nachbestellen` in Spalte I (`Bestellstatus`) der entsprechenden Zeile. Bestätigung erscheint als grüner Status (`Nachbestellen ✓`).
+#### Option A – Produkt hinzufügen
 
-   **REF noch nicht vorhanden** – eine Option:
-   - Es erscheint der grüne Button **„Neues Produkt anlegen"**
-   - Tipp → Gemini wird nach Produktdetails befragt (dauert ca. 1–2 Sekunden)
-   - Ein Formular öffnet sich, Artikelname, Hersteller und Kategorie sind wenn möglich vorausgefüllt
-   - Ergänze die fehlenden Felder:
-     - **Artikelname** *(Pflicht)*
-     - Hersteller, Kategorie
-     - Hauptlieferant, Alt. Lieferant 1–4 (Namen exakt wie im „Lieferanten"-Tab eintragen)
-     - Artikelcode, Lagerort
-   - Tipp auf **„Bestätigen"** – eine neue Zeile wird in `Bestellungen` angelegt (Spalte I bekommt automatisch `Nachbestellen`)
+- Tipp auf **„Produkt hinzufügen"** → Kamera erscheint, Scan ausführen
+- Direkt nach dem Scan öffnet sich das Formular „Neues Produkt"
+- Felder:
+  - **Suchbegriff *** (z.B. Hersteller oder Produktbeschreibung) – auf **„Vorschlag laden"** tippen, Gemini füllt Artikelname, Hersteller, Kategorie und Alternativ-Lieferanten vor
+  - **Artikelname *** (Pflicht)
+  - Kategorie
+  - **Hauptlieferant** (Dropdown – Werte aus dem „Lieferanten"-Tab)
+  - Alt. Lieferant 1–4 (Freitext, Namen exakt wie im „Lieferanten"-Tab)
+  - Artikelcode, Lagerort
+- Tipp auf **„Bestätigen"** – eine neue Zeile wird in `Bestellungen` angelegt (Spalte I bekommt automatisch `Nachbestellen`)
+
+#### Option B – Produkt suchen
+
+- Tipp auf **„Produkt suchen"** → Kamera erscheint, Scan ausführen
+- Die App gleicht die REF mit Spalte F im Sheet `Bestellungen` ab:
+  - **Treffer:** Es erscheint das Modal **„Bestellstatus setzen"** mit einem Dropdown der erlaubten Werte (aus dem `Bestellstatus`-Tab). Wähle einen Wert und tipp **„Speichern"** – der Status wird in Spalte I des gefundenen Produkts geschrieben.
+  - **Kein Treffer:** Es erscheint der grüne Button **„Neues Produkt anlegen"** → führt in den gleichen Ablauf wie Option A.
+
+#### Option C – Produkt nachbestellen
+
+- Tipp auf **„Produkt nachbestellen"** → Kamera erscheint, Scan ausführen
+- Bei Treffer:
+  - Es erscheinen **„Öffnen →"-Links** zu allen Lieferanten des Produkts; der Hauptlieferant ist mit einem Stern (★) und gelber Markierung hervorgehoben.
+  - Button **„Nachbestellen"** – schreibt `Nachbestellen` in Spalte I (`Bestellstatus`) der entsprechenden Zeile. Bestätigung erscheint als grüner Status (`Nachbestellen ✓`).
+- Bei keinem Treffer: Hinweis und „Neues Produkt anlegen"-Button (wie in Option B).
 
 ---
 
@@ -327,5 +339,4 @@ curl -L -X POST "DEINE_APPS_SCRIPT_URL" \
 
 ## Was noch nicht möglich ist
 
-- **Suchen:** Man kann noch kein unbekanntes Etikett scannen und herausfinden, welchem **bestehenden** Produkt es gehört. Diese Funktion ist technisch vorbereitet (Search-Modus) und kann in einem nächsten Schritt aktiviert werden.
 - **Barcode / QR-Code:** Die App erkennt gedruckten Text per OCR – keine Barcodes oder QR-Codes.
