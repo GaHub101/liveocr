@@ -141,7 +141,7 @@
     }
 
     #confidence-bar-wrap {
-      margin-top: 8px;
+      margin-top: 4px;
       height: 4px;
       background: #0f172a;
       border-radius: 2px;
@@ -657,16 +657,16 @@
     <div id="result-box">
       <div id="result-label">Erkannter Text</div>
       <div id="result-text">–</div>
-      <div id="confidence-bar-wrap">
-        <div id="confidence-bar"></div>
-      </div>
-      <div id="confidence-label"></div>
     </div>
+    <input id="search-ref-input" type="text" style="display:none" placeholder="REF prüfen/korrigieren">
+    <div id="confidence-bar-wrap">
+      <div id="confidence-bar"></div>
+    </div>
+    <div id="confidence-label"></div>
 
     <button id="scan-btn">Scannen</button>
     <button id="send-btn" disabled>REF-Nr. hinzufügen</button>
     <button id="reorder-btn" style="display:none">Nachbestellen</button>
-    <input id="search-ref-input" type="text" style="display:none" placeholder="REF prüfen/korrigieren">
     <button id="search-confirm-btn" style="display:none">Suchen</button>
     <button id="lookup-btn" style="display:none">Neues Produkt anlegen</button>
     <div id="queue-info"></div>

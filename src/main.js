@@ -49,37 +49,20 @@ let lastFoundProductId  = null;  // ID der zuletzt im Sheet gefundenen REF
 let cachedStatusValues  = [];
 
 async function handleAddMode(text) {
-  showSearchRefInput(true, text, 'Weiter');
+  document.getElementById('search-ref-input').value = text;
   setStatus('REF prüfen und "Weiter" klicken', 'ready');
 }
 
 async function handleSearchMode(text) {
-  // Option B: REF-Nr. anzeigen, editierbar machen, Suche erst nach Bestätigung
-  showSearchRefInput(true, text);
+  document.getElementById('search-ref-input').value = text;
   setStatus('REF prüfen und "Suchen" klicken', 'ready');
 }
 
-async function handleReorderMode(text, confidence) {
-  // Option C: Lieferantenliste mit Hauptlieferant hervorgehoben + Reorder-Button
-  sendOrQueue(
-    { ref: text, confidence: Math.round(confidence), timestamp: new Date().toISOString() },
-    updateQueueBadge,
-  ).catch((err) => log.warn('main', `Auto-Log fehlgeschlagen: ${err.message}`));
-
-  const result = await checkRef(text);
-  if (result.status === 'ok') {
-    lastFoundProductId = result.id;
-    const suppliers = await getProductSuppliers(result.id);
-    showSupplierLinks(suppliers, text);
-    showReorderButton(true);
-    showLookupButton(false);
-  } else {
-    lastFoundProductId = null;
-    showSupplierLinks([], text);
-    showReorderButton(false);
-    showLookupButton(result.status === 'not_found');
-  }
+async function handleReorderMode(text) {
+  document.getElementById('search-ref-input').value = text;
+  setStatus('REF prüfen und "Bestellen" klicken', 'ready');
 }
+
 
 async function main() {
   // Produkt-Banner anzeigen wenn aus AppSheet mit ?id= geöffnet
@@ -145,7 +128,8 @@ async function main() {
         return;
       }
 
-      // Such-Modus: checkRef
+      // Such- und Nachbestell-Modus: checkRef
+      const originalLabel = searchConfirmBtn.textContent;
       searchConfirmBtn.disabled = true;
       searchConfirmBtn.textContent = 'Suche…';
       sendOrQueue(
@@ -154,7 +138,27 @@ async function main() {
       ).catch((err) => log.warn('main', `Auto-Log fehlgeschlagen: ${err.message}`));
       const result = await checkRef(ref);
       searchConfirmBtn.disabled = false;
-      searchConfirmBtn.textContent = 'Suchen';
+      searchConfirmBtn.textContent = originalLabel;
+
+      if (userMode === 'reorder') {
+        if (result.status === 'ok') {
+          lastFoundProductId = result.id;
+          showSearchRefInput(false);
+          const suppliers = await getProductSuppliers(result.id);
+          showSupplierLinks(suppliers, ref);
+          showReorderButton(true);
+          showLookupButton(false);
+        } else {
+          lastFoundProductId = null;
+          showSupplierLinks([], ref);
+          showReorderButton(false);
+          showLookupButton(result.status === 'not_found');
+          setStatus('REF nicht gefunden', 'ready');
+        }
+        return;
+      }
+
+      // Such-Modus
       if (result.status === 'ok') {
         lastFoundProductId = result.id;
         showSearchRefInput(false);
@@ -294,9 +298,9 @@ async function main() {
         } else if (userMode === 'add') {
           handleAddMode(text);
         } else if (userMode === 'search') {
-          handleSearchMode(text, confidence);
+          handleSearchMode(text);
         } else if (userMode === 'reorder') {
-          handleReorderMode(text, confidence);
+          handleReorderMode(text);
         }
       }
     });
@@ -366,7 +370,9 @@ function selectMode(mode) {
   userMode = mode;
   log.info('main', `Mode gewählt: ${mode}`);
   showModeSelector(false);
-  setStatus(`Modus: ${modeLabel(mode)} – jetzt scannen`, 'ready');
+  const btnLabels = { add: 'Weiter', search: 'Suchen', reorder: 'Bestellen' };
+  showSearchRefInput(true, '', btnLabels[mode] || 'Weiter');
+  setStatus(`Modus: ${modeLabel(mode)} – scannen oder REF eingeben`, 'ready');
 }
 
 function modeLabel(m) {
