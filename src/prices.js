@@ -63,3 +63,38 @@ export async function getProductSuppliers(productId) {
     return [];
   }
 }
+
+export async function listSuppliers() {
+  try {
+    const data = await post({ action: 'listSuppliers' });
+    const names = data.suppliers || [];
+    log.info('prices', `listSuppliers: ${names.length} Lieferanten`);
+    return names;
+  } catch (err) {
+    log.warn('prices', `listSuppliers fehlgeschlagen: ${err.message}`);
+    return [];
+  }
+}
+
+export async function listStatusValues() {
+  try {
+    const data = await post({ action: 'listStatusValues' });
+    const values = data.values || [];
+    log.info('prices', `listStatusValues: ${values.length} Werte`);
+    return values;
+  } catch (err) {
+    log.warn('prices', `listStatusValues fehlgeschlagen: ${err.message}`);
+    return [];
+  }
+}
+
+export async function setOrderStatus(id, status) {
+  try {
+    const data = await post({ action: 'setStatus', id, status });
+    log.info('prices', `setStatus: id=${id} status="${status}" → ${data.status}`);
+    return data;
+  } catch (err) {
+    log.warn('prices', `setStatus fehlgeschlagen: id=${id} – ${err.message}`);
+    return { status: 'error', message: err.message };
+  }
+}

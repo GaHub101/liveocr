@@ -14,12 +14,16 @@
  *   F: REF-Nummer ← OCR | G: Artikelcode | H: Lagerort | I: Bestellstatus
  *   J: Notiz | K: Artikelbild | L: Bestellmenge | M: Einheit
  *   N: Alt. Lieferant 1 | O: Alt. Lieferant 2 | P: Alt. Lieferant 3 | Q: Alt. Lieferant 4
+ *
+ * Sheet-Struktur "Bestellstatus" (Spalte A ab Zeile 2 = mögliche Werte für
+ *   Spalte I in "Bestellungen"; Header in Zeile 1).
  */
 
 var BESTELLUNGEN_SHEET       = 'Bestellungen';
 var LOG_SHEET                = 'OCR_Results';
 var USAGE_LOG_SHEET          = 'Nutzungslog';
 var SUPPLIERS_SHEET          = 'Lieferanten';
+var STATUS_SHEET             = 'Bestellstatus';
 var REF_COL                  = 6;   // Spalte F (1-based)
 var STATUS_COL               = 9;   // Spalte I, Bestellstatus (1-based)
 var ID_COL_INDEX             = 0;   // Spalte A (0-based)
@@ -91,6 +95,18 @@ function doPost(e) {
 
     if (payload.action === 'markReorder') {
       return handleMarkReorder(payload);
+    }
+
+    if (payload.action === 'listSuppliers') {
+      return handleListSuppliers();
+    }
+
+    if (payload.action === 'listStatusValues') {
+      return handleListStatusValues();
+    }
+
+    if (payload.action === 'setStatus') {
+      return handleSetStatus(payload);
     }
 
     if (payload.id) {
@@ -591,6 +607,102 @@ function handleMarkReorder(payload) {
       }
     }
     logUsage('markReorder', 'not_found', 'id=' + id);
+    return jsonResponse({ status: 'not_found', message: 'ID ' + id + ' nicht gefunden' });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lieferantenliste – Spalte A des "Lieferanten"-Tabs
+// ---------------------------------------------------------------------------
+
+function handleListSuppliers() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SUPPLIERS_SHEET);
+  if (!sheet) {
+    logUsage('listSuppliers', 'error', 'Sheet "' + SUPPLIERS_SHEET + '" nicht gefunden');
+    return jsonResponse({ status: 'ok', suppliers: [] });
+  }
+  var data = sheet.getDataRange().getValues();
+  var names = [];
+  for (var i = 1; i < data.length; i++) {
+    var n = String(data[i][0] || '').trim();
+    if (n) names.push(n);
+  }
+  logUsage('listSuppliers', 'ok', 'count=' + names.length);
+  return jsonResponse({ status: 'ok', suppliers: names });
+}
+
+// ---------------------------------------------------------------------------
+// Bestellstatus-Werte – Spalte A des "Bestellstatus"-Tabs
+// ---------------------------------------------------------------------------
+
+function handleListStatusValues() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STATUS_SHEET);
+  if (!sheet) {
+    logUsage('listStatusValues', 'error', 'Sheet "' + STATUS_SHEET + '" nicht gefunden');
+    return jsonResponse({ status: 'ok', values: [] });
+  }
+  var data = sheet.getDataRange().getValues();
+  var values = [];
+  for (var i = 1; i < data.length; i++) {
+    var v = String(data[i][0] || '').trim();
+    if (v) values.push(v);
+  }
+  logUsage('listStatusValues', 'ok', 'count=' + values.length);
+  return jsonResponse({ status: 'ok', values: values });
+}
+
+// ---------------------------------------------------------------------------
+// Bestellstatus für Produkt-ID setzen (Option B – Produkt gefunden)
+// ---------------------------------------------------------------------------
+
+function handleSetStatus(payload) {
+  var id     = String(payload.id     || '').trim();
+  var status = String(payload.status || '').trim();
+  if (!id || !status) {
+    logUsage('setStatus', 'error', 'id oder status fehlt');
+    return jsonResponse({ status: 'error', message: 'id und status erforderlich' });
+  }
+
+  // Status gegen die Werte aus dem Bestellstatus-Tab validieren (Sheet-Vergiftung verhindern)
+  var statusSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(STATUS_SHEET);
+  if (statusSheet) {
+    var sData = statusSheet.getDataRange().getValues();
+    var allowed = {};
+    for (var k = 1; k < sData.length; k++) {
+      var v = String(sData[k][0] || '').trim();
+      if (v) allowed[v] = true;
+    }
+    if (Object.keys(allowed).length > 0 && !allowed[status]) {
+      logUsage('setStatus', 'error', 'Ungültiger Status="' + status + '"');
+      return jsonResponse({ status: 'error', message: 'Ungültiger Bestellstatus' });
+    }
+  }
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(BESTELLUNGEN_SHEET);
+  if (!sheet) {
+    logUsage('setStatus', 'error', 'Sheet nicht gefunden');
+    return jsonResponse({ status: 'error', message: 'Sheet "' + BESTELLUNGEN_SHEET + '" nicht gefunden' });
+  }
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (lockErr) {
+    logUsage('setStatus', 'error', 'Lock-Timeout – id=' + id);
+    return jsonResponse({ status: 'error', message: 'Server überlastet – bitte erneut versuchen' });
+  }
+
+  try {
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][ID_COL_INDEX]) === id) {
+        sheet.getRange(i + 1, STATUS_COL).setValue(status);
+        Logger.log('setStatus: id=' + id + ' status=' + status + ' row=' + (i + 1));
+        logUsage('setStatus', 'ok', 'id=' + id + ' status=' + status);
+        return jsonResponse({ status: 'ok', row: i + 1, id: id });
+      }
+    }
+    logUsage('setStatus', 'not_found', 'id=' + id);
     return jsonResponse({ status: 'not_found', message: 'ID ' + id + ' nicht gefunden' });
   } finally {
     lock.releaseLock();
