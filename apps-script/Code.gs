@@ -346,14 +346,19 @@ function handleGeminiOcr(base64Image, mimeType) {
   }
 
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
-  var prompt = 'Find the REF code on this product label (digits, letters, hyphens or slashes — e.g. "630-0032", "012345A"). It appears next to or below "REF", often in a box. Return ONLY the code. If unclear, best guess. If none visible: NONE';
+  var prompt = 'Read this product label and return ONLY a JSON object with two keys:'
+    + ' "ref" = the REF code (digits, letters, hyphens or slashes — e.g. "630-0032", "012345A"),'
+    + ' typically next to or below "REF", often in a box. If unclear, best guess. If none visible: empty string "".'
+    + ' "suggestion" = a short search hint (1–4 words) read from the label — manufacturer/brand name'
+    + ' and/or product type (e.g. "Ormco brackets", "3M Filtek"). If nothing readable: empty string "".'
+    + ' Return ONLY the JSON object, no markdown code fences, no commentary.';
 
   var body = {
     contents: [{ parts: [
       { text: prompt },
       { inline_data: { mime_type: resolvedMime, data: base64Image } }
     ]}],
-    generationConfig: { maxOutputTokens: 50, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
+    generationConfig: { maxOutputTokens: 150, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
   };
 
   var resp = UrlFetchApp.fetch(url, {
@@ -391,11 +396,34 @@ function handleGeminiOcr(base64Image, mimeType) {
   var parts = result.candidates[0].content.parts || [];
   var textParts = parts.filter(function(p) { return !p.thought && p.text; });
   var raw = textParts.length > 0 ? textParts[textParts.length - 1].text.trim() : '';
-  var ref = (raw === 'NONE' || raw === '') ? '' : raw;
 
-  Logger.log('handleGeminiOcr: raw="' + raw + '" ref=' + (ref || '(leer)'));
-  logUsage('ocr', ref ? 'ok' : 'not_found', ref ? 'ref=' + ref : 'kein REF erkannt');
-  return jsonResponse({ status: ref ? 'ok' : 'not_found', ref: ref, raw: raw.substring(0, 200) });
+  // JSON aus raw extrahieren (robust gegen Markdown-Fences)
+  var ref = '';
+  var suggestion = '';
+  var jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      var parsed = JSON.parse(jsonMatch[0]);
+      ref = String(parsed.ref || '').trim();
+      suggestion = String(parsed.suggestion || '').trim();
+    } catch (parseErr) {
+      Logger.log('handleGeminiOcr: JSON-Parse fehlgeschlagen, raw="' + raw + '"');
+    }
+  }
+  // Fallback: rohe Antwort als REF interpretieren (alte Antwortform / falls Modell JSON-Format ignoriert)
+  if (!ref && raw && raw !== 'NONE' && REF_PATTERN.test(raw)) {
+    ref = raw;
+  }
+
+  Logger.log('handleGeminiOcr: raw="' + raw + '" ref=' + (ref || '(leer)') + ' suggestion=' + (suggestion || '(leer)'));
+  logUsage('ocr', ref ? 'ok' : 'not_found',
+    'ref=' + (ref || '-') + ' suggestion=' + (suggestion || '-'));
+  return jsonResponse({
+    status: ref ? 'ok' : 'not_found',
+    ref: ref,
+    suggestion: suggestion,
+    raw: raw.substring(0, 200)
+  });
 }
 
 // ---------------------------------------------------------------------------

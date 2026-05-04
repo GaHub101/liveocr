@@ -13,6 +13,8 @@ import {
   showModeSelector, populateSupplierDropdown, populateLocationDropdown,
   populateStatusDropdown, showSearchRefInput,
   showStatusModal, getStatusModalValue, setStatusModalState,
+  showModeSwitcher, setActiveModeSwitch,
+  showSearchSuggestionInput, getSearchSuggestionValue,
 } from './ui.js';
 import {
   checkRef, lookupProduct, addProduct, getProductSuppliers, markReorder,
@@ -44,12 +46,16 @@ let userMode = productId ? 'reorder' : null;
 
 let lastText            = '';
 let lastConfidence      = 0;
+let lastSuggestion      = '';   // OCR-Suchvorschlag aus dem Etikett (Wishlist Pkt. 4)
 let cachedSuppliers     = [];
 let lastFoundProductId  = null;  // ID der zuletzt im Sheet gefundenen REF
 let cachedStatusValues  = [];
 
+const modeBtnLabels = { add: 'Weiter', search: 'Suchen', reorder: 'Bestellen' };
+
 async function handleAddMode(text) {
   document.getElementById('search-ref-input').value = text;
+  showSearchSuggestionInput(true, lastSuggestion);
   setStatus('REF prüfen und "Weiter" klicken', 'ready');
 }
 
@@ -68,6 +74,7 @@ async function main() {
   // Produkt-Banner anzeigen wenn aus AppSheet mit ?id= geöffnet
   if (productId) {
     showProductBanner(productName, productId);
+    showModeSwitcher(false);
     getProductSuppliers(productId).then(s => { cachedSuppliers = s; });
   }
 
@@ -79,6 +86,15 @@ async function main() {
     modeAddBtn.addEventListener('click',     () => selectMode('add'));
     modeSearchBtn.addEventListener('click',  () => selectMode('search'));
     modeReorderBtn.addEventListener('click', () => selectMode('reorder'));
+
+    // Mode-Switcher in der Scan-Ansicht (Wishlist Pkt. 4)
+    document.querySelectorAll('.mode-switch-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const newMode = btn.dataset.mode;
+        if (!newMode || newMode === userMode) return;
+        switchMode(newMode);
+      });
+    });
   }
 
   // Lieferanten + Bestellstatus-Werte parallel laden (für Dropdowns)
@@ -118,9 +134,11 @@ async function main() {
     const searchRefInput   = document.getElementById('search-ref-input');
     const searchConfirmBtn = document.getElementById('search-confirm-btn');
 
-    const modeBtnLabels = { add: 'Weiter', search: 'Suchen', reorder: 'Bestellen' };
     function resetToEditField() {
       showSearchRefInput(true, '', modeBtnLabels[userMode] || 'Weiter');
+      // Add-Modus: Suchvorschlag-Feld leer einblenden, sonst verbergen (Wishlist Pkt. 4)
+      if (userMode === 'add') showSearchSuggestionInput(true, '');
+      else                    showSearchSuggestionInput(false);
     }
 
     searchConfirmBtn.addEventListener('click', async () => {
@@ -128,8 +146,11 @@ async function main() {
       if (!ref) return;
 
       if (userMode === 'add') {
+        const sugg = getSearchSuggestionValue();
         showSearchRefInput(false);
+        showSearchSuggestionInput(false);
         setLookupModal('form', ref, null);
+        if (sugg) document.getElementById('lk-hersteller').value = sugg;
         return;
       }
 
@@ -149,6 +170,7 @@ async function main() {
         if (result.status === 'ok') {
           lastFoundProductId = result.id;
           showSearchRefInput(false);
+          showSearchSuggestionInput(false);
           const suppliers = await getProductSuppliers(result.id);
           showSupplierLinks(suppliers, ref);
           showReorderButton(true);
@@ -158,6 +180,8 @@ async function main() {
           showSupplierLinks([], ref);
           showReorderButton(false);
           showLookupButton(true);
+          // REF nicht in DB → Suchvorschlag-Feld einblenden für ggf. "Neues Produkt anlegen" (Wishlist Pkt. 4)
+          showSearchSuggestionInput(true, lastSuggestion);
           setStatus('REF nicht gefunden – als neues Produkt anlegen?', 'ready');
         }
         return;
@@ -167,10 +191,12 @@ async function main() {
       if (result.status === 'ok') {
         lastFoundProductId = result.id;
         showSearchRefInput(false);
+        showSearchSuggestionInput(false);
         showStatusModal(true, cachedStatusValues);
       } else {
         lastFoundProductId = null;
         showLookupButton(true);
+        showSearchSuggestionInput(true, lastSuggestion);
         setStatus('REF nicht gefunden – als neues Produkt anlegen?', 'ready');
       }
     });
@@ -178,9 +204,12 @@ async function main() {
     lookupBtn.addEventListener('click', () => {
       const ref = (searchRefInput && searchRefInput.value.trim()) || lastText;
       if (!ref) return;
+      const sugg = getSearchSuggestionValue() || lastSuggestion;
       showSearchRefInput(false);
+      showSearchSuggestionInput(false);
       showLookupButton(false);
       setLookupModal('form', ref, null);
+      if (sugg) document.getElementById('lk-hersteller').value = sugg;
     });
     lookupCancel.addEventListener('click', () => { setLookupModal('hidden'); resetToEditField(); });
 
@@ -292,12 +321,17 @@ async function main() {
     lastFoundProductId = null;
     setLookupModal('hidden');
     showStatusModal(false);
-    await scheduleRecognition(canvas, (text, confidence) => {
-      log.info('main', `OCR-Ergebnis: "${text || '–'}", Konfidenz=${confidence}%`);
+    await scheduleRecognition(canvas, (text, confidence, suggestion = '') => {
+      log.info('main', `OCR-Ergebnis: "${text || '–'}", Konfidenz=${confidence}%, Vorschlag="${suggestion || '–'}"`);
       lastText       = text;
       lastConfidence = confidence;
+      lastSuggestion = suggestion || '';
       showResult(text, confidence);
       setStatus('Erkannt', 'ready');
+      // Add-Modus: Suchvorschlag immer aktualisieren – auch wenn keine REF erkannt wurde
+      if (!productId && userMode === 'add') {
+        showSearchSuggestionInput(true, lastSuggestion);
+      }
       if (text) {
         if (productId) {
           // ?id= → Lieferantenliste anzeigen, Reorder erfolgt nach Send-Klick
@@ -377,9 +411,37 @@ function selectMode(mode) {
   userMode = mode;
   log.info('main', `Mode gewählt: ${mode}`);
   showModeSelector(false);
-  const btnLabels = { add: 'Weiter', search: 'Suchen', reorder: 'Bestellen' };
-  showSearchRefInput(true, '', btnLabels[mode] || 'Weiter');
+  showModeSwitcher(true);
+  setActiveModeSwitch(mode);
+  showSearchRefInput(true, '', modeBtnLabels[mode] || 'Weiter');
+  // Add-Modus: Suchvorschlag-Feld direkt einblenden (Wishlist Pkt. 4)
+  if (mode === 'add') showSearchSuggestionInput(true, '');
+  else                showSearchSuggestionInput(false);
   setStatus(`Modus: ${modeLabel(mode)} – scannen oder REF eingeben`, 'ready');
+}
+
+// Mode-Wechsel aus der Scan-Ansicht heraus (Wishlist Pkt. 4)
+// REF + Suggestion bleiben erhalten, transiente UI-States werden zurückgesetzt.
+function switchMode(mode) {
+  userMode = mode;
+  log.info('main', `Mode gewechselt: ${mode}`);
+  setActiveModeSwitch(mode);
+  // Modals + Sekundär-Buttons schließen
+  setLookupModal('hidden');
+  showStatusModal(false);
+  showSupplierLinks([], '');
+  showLookupButton(false);
+  showReorderButton(false);
+  setReorderState('idle');
+  lastFoundProductId = null;
+  // REF-Eingabefeld wieder anzeigen, Inhalt erhalten, Button-Label umbenennen
+  const inp = document.getElementById('search-ref-input');
+  const currentRef = inp ? inp.value : '';
+  showSearchRefInput(true, currentRef, modeBtnLabels[mode] || 'Weiter');
+  // Suchvorschlag-Feld nach Mode-Regel: Add zeigt es immer; sonst verbergen
+  if (mode === 'add') showSearchSuggestionInput(true, lastSuggestion);
+  else                showSearchSuggestionInput(false);
+  setStatus(`Modus: ${modeLabel(mode)}`, 'ready');
 }
 
 function modeLabel(m) {

@@ -192,6 +192,43 @@
       margin-bottom: 0;
     }
 
+    #search-suggestion-input {
+      width: 100%;
+      box-sizing: border-box;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #cbd5e1;
+      padding: 7px 12px;
+      font-size: 0.9rem;
+      margin-top: 4px;
+    }
+    #search-suggestion-input::placeholder { color: #475569; }
+
+    #mode-switcher {
+      display: none;
+      justify-content: flex-end;
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+    .mode-switch-btn {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .mode-switch-btn.active {
+      background: #1e40af;
+      color: #fff;
+      border-color: #3b82f6;
+    }
+
     #scan-btn {
       background: #3b82f6;
       font-size: 1.1rem;
@@ -654,11 +691,18 @@
       <span id="status-text">Initialisiere…</span>
     </div>
 
+    <div id="mode-switcher">
+      <button class="mode-switch-btn" data-mode="add" type="button">Hinzufügen</button>
+      <button class="mode-switch-btn" data-mode="search" type="button">Suchen</button>
+      <button class="mode-switch-btn" data-mode="reorder" type="button">Nachbestellen</button>
+    </div>
+
     <div id="result-box">
       <div id="result-label">Erkannter Text</div>
       <div id="result-text">–</div>
     </div>
     <input id="search-ref-input" type="text" style="display:none" placeholder="REF prüfen/korrigieren">
+    <input id="search-suggestion-input" type="text" style="display:none" placeholder="Suchvorschlag (Hersteller / Produkttyp)">
     <div id="confidence-bar-wrap">
       <div id="confidence-bar"></div>
     </div>
