@@ -14,6 +14,37 @@ export function preprocessBitmap(bitmap, canvas) {
   return cropToCanvas(bitmap, bitmap.width, bitmap.height, canvas);
 }
 
+// Schärfe-Schätzung: Quelle klein/grau zeichnen, Gradient-Energie
+// (Tenengrad-Variante) aufsummieren. Höher = schärfer.
+const _sharpCanvas = document.createElement('canvas');
+
+export function sharpnessScore(source, w, h) {
+  if (!w || !h) return 0;
+  const sw = 160;
+  const sh = Math.max(1, Math.round((h / w) * sw));
+  _sharpCanvas.width  = sw;
+  _sharpCanvas.height = sh;
+  const ctx = _sharpCanvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(source, 0, 0, sw, sh);
+  const px = ctx.getImageData(0, 0, sw, sh).data;
+
+  const gray = new Float64Array(sw * sh);
+  for (let i = 0, j = 0; j < gray.length; i += 4, j++) {
+    gray[j] = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+  }
+
+  let sum = 0;
+  for (let y = 1; y < sh - 1; y++) {
+    for (let x = 1; x < sw - 1; x++) {
+      const idx = y * sw + x;
+      const gx = gray[idx + 1] - gray[idx - 1];
+      const gy = gray[idx + sw] - gray[idx - sw];
+      sum += gx * gx + gy * gy;
+    }
+  }
+  return sum / ((sw - 2) * (sh - 2));
+}
+
 function cropToCanvas(source, vw, vh, canvas) {
   if (!vw || !vh) return false;
 

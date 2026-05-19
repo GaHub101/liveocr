@@ -1,4 +1,61 @@
 import { log } from './logger.js';
+import { sharpnessScore } from './canvas.js';
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Aus mehreren Frames den schärfsten wählen. Gegen Sofort-Abgriff
+// während der Autofokus noch „pumpt" – ohne Fokus-applyConstraints
+// (CLAUDE.md / Commit 7b2dfc9). Liefert ein ImageBitmap oder null
+// (dann soll der Aufrufer den Video-Frame direkt nehmen).
+export async function captureSharpest({ video, imageCapture }, n = 6, spanMs = 700) {
+  const step = Math.max(60, Math.round(spanMs / n));
+  let best = null;
+  let bestScore = -1;
+  let bestKind = '';
+
+  const consider = (bitmap, kind) => {
+    if (!bitmap) return;
+    const score = sharpnessScore(bitmap, bitmap.width, bitmap.height);
+    if (score > bestScore) {
+      if (best) best.close();
+      best = bitmap;
+      bestScore = score;
+      bestKind = kind;
+    } else {
+      bitmap.close();
+    }
+  };
+
+  for (let i = 0; i < n; i++) {
+    try {
+      let bmp = null;
+      if (imageCapture && typeof imageCapture.grabFrame === 'function') {
+        bmp = await imageCapture.grabFrame();
+      } else if (video.videoWidth) {
+        bmp = await createImageBitmap(video);
+      }
+      consider(bmp, 'frame');
+    } catch (err) {
+      log.warn('camera', `Frame-Capture übersprungen [${err.name}]`);
+    }
+    if (i < n - 1) await sleep(step);
+  }
+
+  // Ein takePhoto()-Kandidat (auf manchen Geräten schärfer)
+  if (imageCapture && typeof imageCapture.takePhoto === 'function') {
+    try {
+      const blob = await imageCapture.takePhoto();
+      consider(await createImageBitmap(blob), 'photo');
+    } catch (err) {
+      log.warn('camera', `takePhoto übersprungen [${err.name}]`);
+    }
+  }
+
+  if (best) {
+    log.info('camera', `Schärfster Frame: Quelle=${bestKind}, Score=${Math.round(bestScore)}`);
+  }
+  return best;
+}
 
 export async function startCamera(videoEl) {
   const stream = await navigator.mediaDevices.getUserMedia({
