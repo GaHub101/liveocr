@@ -17,6 +17,17 @@
 
 ---
 
+### Unscharfe Nahaufnahme auf Samsung S24
+**Status:** behoben (Iterationen 1–3)
+**Symptom:** Bei Nahaufnahme verschwommenes Bild, am Tablet ok. Auto-Senden ohne Kontrolle.
+**Ursache:** Sofort-Abgriff eines Video-Frames während der AF noch „pumpt"; `takePhoto()` allein liefert auf Android-Chromium keinen scharfen AF-Zyklus; Hauptkamera hat eine zu große Naheinstellgrenze; ein wieder eingebauter Tap-to-Focus-`applyConstraints({focusMode})` störte zusätzlich Samsungs nativen AF (Regress von `7b2dfc9`).
+**Fix:**
+1. `captureSharpest` – schärfster aus mehreren Frames statt Sofort-Abgriff.
+2. Prüf-Vorschau vor dem Senden („Senden" / „Neu aufnehmen").
+3. Tap-to-Focus-`applyConstraints` erneut entfernt; Auto-Wahl einer Ultraweit-/Nah-Kamera (`enumerateDevices`/`deviceId`) + manueller Umschalter + Hauptkamera-Fallback; **Zoom** als einziger erlaubter `applyConstraints`-Hebel (kein Fokus-Constraint → kein S24-AF-Regress).
+
+---
+
 ### OCR funktionierte gar nicht (Worker-in-Worker)
 **Status:** behoben in Commit `85d21a7`  
 **Symptom:** Kamera lief, aber kein einziger OCR-Versuch im Log.  

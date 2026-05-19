@@ -119,6 +119,30 @@ export function showReviewControls(visible) {
   if (scanB)  scanB.style.display  = visible ? 'none'  : 'block';
 }
 
+// Kamera-Umschalter (nur bei >1 Rückkamera)
+export function showCameraSwitch(visible) {
+  const btn = document.getElementById('cam-switch-btn');
+  if (btn) btn.style.display = visible ? 'block' : 'none';
+}
+
+// Zoom-Regler (nur wenn die Kamera Zoom unterstützt)
+export function showZoomControl(visible, caps) {
+  const wrap = document.getElementById('zoom-wrap');
+  const inp  = document.getElementById('zoom-range');
+  if (wrap) wrap.style.display = visible ? 'flex' : 'none';
+  if (visible && inp && caps) {
+    inp.min   = caps.min;
+    inp.max   = caps.max;
+    inp.step  = caps.step || 0.1;
+    inp.value = caps.value ?? caps.min;
+  }
+}
+
+export function getZoomValue() {
+  const inp = document.getElementById('zoom-range');
+  return inp ? Number(inp.value) : null;
+}
+
 export function showLookupButton(show) {
   document.getElementById('lookup-btn').style.display = show ? 'block' : 'none';
 }

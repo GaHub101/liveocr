@@ -15,7 +15,7 @@ import {
   showStatusModal, getStatusModalValue, setStatusModalState,
   showModeSwitcher, setActiveModeSwitch,
   showSearchSuggestionInput, getSearchSuggestionValue,
-  showReviewControls,
+  showReviewControls, showCameraSwitch, showZoomControl, getZoomValue,
 } from './ui.js';
 import {
   checkRef, lookupProduct, addProduct, getProductSuppliers, markReorder,
@@ -108,8 +108,12 @@ async function main() {
   // Kamera starten
   setLoadingMessage('Kamera wird gestartet…', 10);
   let imageCapture = null;
+  let switchToNext = null;
+  let setZoom = null;
+  let cameras = [];
+  let zoomCaps = null;
   try {
-    ({ imageCapture } = await startCamera(video));
+    ({ imageCapture, switchToNext, setZoom, cameras, zoomCaps } = await startCamera(video));
     log.info('main', 'Kamera gestartet');
   } catch (err) {
     log.error('main', 'Kamerazugriff fehlgeschlagen', err);
@@ -117,6 +121,28 @@ async function main() {
     setStatus('Kamerafehler', 'error');
     return;
   }
+
+  // Kamera-Umschalter (nur bei >1 Rückkamera) + Zoom-Slider
+  const camSwitchBtn = document.getElementById('cam-switch-btn');
+  const zoomRange    = document.getElementById('zoom-range');
+  showCameraSwitch(cameras.length > 1);
+  if (zoomCaps) showZoomControl(true, { ...zoomCaps, value: zoomCaps.min });
+
+  camSwitchBtn?.addEventListener('click', async () => {
+    camSwitchBtn.disabled = true;
+    previewFrozen = false;
+    showReviewControls(false);
+    const ctx = await switchToNext();
+    imageCapture = ctx.imageCapture;
+    zoomCaps     = ctx.zoomCaps;
+    if (zoomCaps) showZoomControl(true, { ...zoomCaps, value: getZoomValue() ?? zoomCaps.min });
+    else          showZoomControl(false);
+    camSwitchBtn.disabled = false;
+  });
+
+  zoomRange?.addEventListener('input', () => {
+    if (setZoom) setZoom(getZoomValue());
+  });
 
   await initOCR();
   hideLoading();

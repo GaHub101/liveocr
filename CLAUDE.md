@@ -111,7 +111,7 @@ Populate column A of `Bestellungen` with `=ROW()-1` from A2 downwards. IDs must 
 ### Key design constraints
 
 - **No `Content-Type: application/json` header on POST.** Keeps the request a "simple request", avoiding a CORS preflight that Apps Script cannot answer. Apps Script reads the body via `JSON.parse(e.postData.contents)`.
-- **No `applyConstraints` calls.** Explicit focus mode constraints interfere with Samsung's native AF stack. The Galaxy S24 focuses natively without intervention.
+- **No `focusMode` `applyConstraints` calls.** Explicit focus-mode (and `focusDistance`/`pointsOfInterest`) constraints interfere with Samsung's native AF stack. The Galaxy S24 focuses natively without intervention. The **only** allowed `applyConstraints` use is **`zoom`** (`camera.js`): it is not a focus constraint, does not reactivate the S24 AF regression, and lets the user scan from a focusable distance instead of crossing the minimum focus distance. Camera lens selection is done via `enumerateDevices()` + `deviceId` (auto heuristic for an ultrawide/near lens, with a manual switcher and main-camera fallback).
 - **Shared secret on every request.** `VITE_WEBHOOK_SECRET` is embedded in the built JS and sent as `secret` in every POST body. Apps Script verifies it against `WEBHOOK_SECRET` in Script Properties. Deters automated abuse; not cryptographically strong (secret is visible in built JS).
 
 ### Debugging
