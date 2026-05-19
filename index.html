@@ -73,6 +73,39 @@
       box-shadow: 0 0 0 9999px rgba(0,0,0,0.35);
     }
 
+    #cam-switch-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 40;
+      display: none;
+      padding: 8px 12px;
+      font-size: 0.85rem;
+      color: #fff;
+      background: rgba(0,0,0,0.55);
+      border: 1px solid rgba(255,255,255,0.4);
+      border-radius: 8px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #cam-switch-btn:disabled { opacity: 0.5; }
+
+    #zoom-wrap {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      z-index: 40;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 10px;
+    }
+    #zoom-wrap span { color: #fff; font-size: 0.85rem; }
+    #zoom-range { flex: 1; accent-color: #3b82f6; }
+
     #canvas { display: none; }
     body.debug-mode #canvas {
       display: block;
@@ -698,6 +731,11 @@
     <div id="scan-overlay">
       <div id="scan-frame">
       </div>
+    </div>
+    <button id="cam-switch-btn" type="button">⟳ Kamera</button>
+    <div id="zoom-wrap">
+      <span>Zoom</span>
+      <input id="zoom-range" type="range" min="0" max="1" step="0.1" value="0">
     </div>
   </div>
 
