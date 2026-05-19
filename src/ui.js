@@ -106,6 +106,19 @@ export function showSupplierLinks(suppliers, ref) {
   panel.style.display = 'block';
 }
 
+// Prüf-Vorschau: aufgenommenes Standbild groß zeigen +
+// „Senden" / „Neu aufnehmen"; Scan-Button solange ausblenden.
+export function showReviewControls(visible) {
+  const canvas = document.getElementById('canvas');
+  const sendB  = document.getElementById('review-send-btn');
+  const retake = document.getElementById('review-retake-btn');
+  const scanB  = document.getElementById('scan-btn');
+  if (canvas) canvas.classList.toggle('review', visible);
+  if (sendB)  sendB.style.display  = visible ? 'block' : 'none';
+  if (retake) retake.style.display = visible ? 'block' : 'none';
+  if (scanB)  scanB.style.display  = visible ? 'none'  : 'block';
+}
+
 export function showLookupButton(show) {
   document.getElementById('lookup-btn').style.display = show ? 'block' : 'none';
 }

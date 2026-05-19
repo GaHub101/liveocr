@@ -177,7 +177,8 @@
       margin-top: 4px;
     }
 
-    #scan-btn, #send-btn, #lookup-btn, #search-confirm-btn {
+    #scan-btn, #send-btn, #lookup-btn, #search-confirm-btn,
+    #review-send-btn, #review-retake-btn {
       width: 100%;
       padding: 16px;
       color: #fff;
@@ -190,6 +191,8 @@
       -webkit-tap-highlight-color: transparent;
     }
 
+    #review-send-btn   { background: #2563eb; margin-bottom: 4px; }
+    #review-retake-btn { background: #475569; margin-bottom: 4px; }
     #lookup-btn       { background: #3b82f6; }
     #search-confirm-btn { background: #15803d; margin-bottom: 4px; }
 
@@ -724,6 +727,8 @@
     <div id="confidence-label"></div>
 
     <button id="scan-btn">Scannen</button>
+    <button id="review-send-btn" style="display:none">Senden</button>
+    <button id="review-retake-btn" style="display:none">Neu aufnehmen</button>
     <button id="send-btn" disabled>REF-Nr. hinzufügen</button>
     <button id="reorder-btn" style="display:none">Nachbestellen</button>
     <button id="search-confirm-btn" style="display:none">Suchen</button>

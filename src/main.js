@@ -1,4 +1,4 @@
-import { startCamera }                             from './camera.js';
+import { startCamera, captureSharpest }            from './camera.js';
 import { preprocessFrame, preprocessBitmap }        from './canvas.js';
 import { initOCR, scheduleRecognition }             from './ocr.js';
 import { sendOrQueue, flushQueue, getQueueLength }  from './send.js';
@@ -15,6 +15,7 @@ import {
   showStatusModal, getStatusModalValue, setStatusModalState,
   showModeSwitcher, setActiveModeSwitch,
   showSearchSuggestionInput, getSearchSuggestionValue,
+  showReviewControls,
 } from './ui.js';
 import {
   checkRef, lookupProduct, addProduct, getProductSuppliers, markReorder,
@@ -24,6 +25,8 @@ import {
 const video   = document.getElementById('video');
 const canvas  = document.getElementById('canvas');
 const scanBtn        = document.getElementById('scan-btn');
+const reviewSendBtn   = document.getElementById('review-send-btn');
+const reviewRetakeBtn = document.getElementById('review-retake-btn');
 const sendBtn        = document.getElementById('send-btn');
 const lookupBtn      = document.getElementById('lookup-btn');
 const reorderBtn     = document.getElementById('reorder-btn');
@@ -128,38 +131,21 @@ async function main() {
   }
   requestAnimationFrame(loop);
 
-  // Beim Scan ein scharfes Standbild über die Foto-Pipeline holen.
-  // takePhoto() löst einen vollständigen Autofokus aus – der Live-
-  // Video-Frame tut das nicht (unscharf bei Nahaufnahme).
+  // Beim Scan den schärfsten aus mehreren Frames holen (gegen
+  // Sofort-Abgriff während der Autofokus noch „pumpt"). Fallback auf
+  // den Video-Frame, wo kein scharfer Kandidat verfügbar ist.
   async function captureToCanvas() {
-    if (imageCapture) {
-      try {
-        let photoSettings;
-        try {
-          const caps = await imageCapture.getPhotoCapabilities();
-          const maxW = caps?.imageWidth?.max;
-          if (maxW) photoSettings = { imageWidth: maxW };
-        } catch { /* getPhotoCapabilities optional */ }
-
-        const blob   = await imageCapture.takePhoto(photoSettings);
-        const bitmap = await createImageBitmap(blob);
-        const ok     = preprocessBitmap(bitmap, canvas);
-        bitmap.close();
+    try {
+      const bmp = await captureSharpest({ video, imageCapture });
+      if (bmp) {
+        const ok = preprocessBitmap(bmp, canvas);
+        bmp.close();
         return ok;
-      } catch (err) {
-        log.warn('main', `Foto-Capture fehlgeschlagen [${err.name}] – Video-Frame Fallback`);
       }
+    } catch (err) {
+      log.warn('main', `Schärfster-Frame fehlgeschlagen [${err.name}] – Video-Frame Fallback`);
     }
     return preprocessFrame(video, canvas);
-  }
-
-  // Aufgenommenes scharfes Foto kurz als Bestätigung zeigen
-  function showCapturedPhoto() {
-    canvas.classList.add('review');
-    setTimeout(() => {
-      canvas.classList.remove('review');
-      previewFrozen = false;
-    }, 1500);
   }
 
   // Standalone-Modus: Modal- und Status-Handler registrieren
@@ -335,26 +321,43 @@ async function main() {
     });
   }
 
-  // Scan-Button
+  // Scan-Button → Stufe 1: scharfes Standbild aufnehmen, dann
+  // Prüf-Vorschau zeigen (NICHT automatisch senden).
   scanBtn.addEventListener('click', async () => {
     if (!productId && !userMode) {
       setStatus('Bitte zuerst eine Aktion wählen', 'error');
       return;
     }
-    log.info('main', `Scan ausgelöst – mode=${userMode ?? 'id'}`);
+    log.info('main', `Aufnahme ausgelöst – mode=${userMode ?? 'id'}`);
     scanBtn.disabled = true;
-    scanBtn.textContent = 'Scannt…';
-    setStatus('Scannt…', 'working');
+    scanBtn.textContent = 'Nehme auf…';
+    setStatus('Nehme auf…', 'working');
     previewFrozen = true;
     const captured = await captureToCanvas();
+    scanBtn.disabled = false;
+    scanBtn.textContent = 'Scannen';
     if (!captured) {
-      log.warn('main', 'Scan abgebrochen – kein Bild verfügbar');
+      log.warn('main', 'Aufnahme abgebrochen – kein Bild verfügbar');
       previewFrozen = false;
-      scanBtn.disabled = false;
-      scanBtn.textContent = 'Scannen';
       setStatus('Kein Bild – erneut versuchen', 'error');
       return;
     }
+    showReviewControls(true);
+    setStatus('Bitte prüfen: scharf? Dann „Senden"', 'ready');
+  });
+
+  // Stufe 2a: „Neu aufnehmen" – verwerfen, zurück zum Live-Sucher
+  reviewRetakeBtn.addEventListener('click', () => {
+    showReviewControls(false);
+    previewFrozen = false;
+    setStatus('Bereit', 'ready');
+  });
+
+  // Stufe 2b: „Senden" – erst jetzt OCR an Gemini
+  reviewSendBtn.addEventListener('click', async () => {
+    reviewSendBtn.disabled = true;
+    reviewSendBtn.textContent = 'Sende…';
+    setStatus('Scannt…', 'working');
     // Panels zurücksetzen vor neuem Scan
     showSupplierLinks([], '');
     showLookupButton(false);
@@ -387,9 +390,10 @@ async function main() {
         }
       }
     });
-    showCapturedPhoto();
-    scanBtn.disabled = false;
-    scanBtn.textContent = 'Scannen';
+    showReviewControls(false);
+    previewFrozen = false;
+    reviewSendBtn.disabled = false;
+    reviewSendBtn.textContent = 'Senden';
     if (!lastText) setStatus('Kein REF gefunden – erneut versuchen', 'error');
   });
 
