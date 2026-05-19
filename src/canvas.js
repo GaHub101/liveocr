@@ -7,8 +7,14 @@ const ZONE_H_RATIO = 0.60;
 const OCR_PAD      = 20;
 
 export function preprocessFrame(video, canvas) {
-  const vw = video.videoWidth;
-  const vh = video.videoHeight;
+  return cropToCanvas(video, video.videoWidth, video.videoHeight, canvas);
+}
+
+export function preprocessBitmap(bitmap, canvas) {
+  return cropToCanvas(bitmap, bitmap.width, bitmap.height, canvas);
+}
+
+function cropToCanvas(source, vw, vh, canvas) {
   if (!vw || !vh) return false;
 
   // The #video element uses object-fit: cover with aspect-ratio: 4/3.
@@ -50,7 +56,7 @@ export function preprocessFrame(video, canvas) {
   const c = canvas.getContext('2d');
   c.fillStyle = '#ffffff';
   c.fillRect(0, 0, outW, outH);
-  c.drawImage(video, zoneX, zoneY, zoneW, zoneH, OCR_PAD, OCR_PAD, zoneW, zoneH);
+  c.drawImage(source, zoneX, zoneY, zoneW, zoneH, OCR_PAD, OCR_PAD, zoneW, zoneH);
 
   return true;
 }

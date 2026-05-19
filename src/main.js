@@ -1,5 +1,5 @@
 import { startCamera }                             from './camera.js';
-import { preprocessFrame }                          from './canvas.js';
+import { preprocessFrame, preprocessBitmap }        from './canvas.js';
 import { initOCR, scheduleRecognition }             from './ocr.js';
 import { sendOrQueue, flushQueue, getQueueLength }  from './send.js';
 import { log, getLogs, clearLogs, exportLogs }      from './logger.js';
@@ -104,8 +104,9 @@ async function main() {
 
   // Kamera starten
   setLoadingMessage('Kamera wird gestartet…', 10);
+  let imageCapture = null;
   try {
-    await startCamera(video);
+    ({ imageCapture } = await startCamera(video));
     log.info('main', 'Kamera gestartet');
   } catch (err) {
     log.error('main', 'Kamerazugriff fehlgeschlagen', err);
@@ -120,11 +121,46 @@ async function main() {
   updateQueueBadge(getQueueLength());
 
   // Canvas-Loop für Debug-Vorschau (kein Auto-Scan)
+  let previewFrozen = false;
   function loop() {
-    preprocessFrame(video, canvas);
+    if (!previewFrozen) preprocessFrame(video, canvas);
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
+
+  // Beim Scan ein scharfes Standbild über die Foto-Pipeline holen.
+  // takePhoto() löst einen vollständigen Autofokus aus – der Live-
+  // Video-Frame tut das nicht (unscharf bei Nahaufnahme).
+  async function captureToCanvas() {
+    if (imageCapture) {
+      try {
+        let photoSettings;
+        try {
+          const caps = await imageCapture.getPhotoCapabilities();
+          const maxW = caps?.imageWidth?.max;
+          if (maxW) photoSettings = { imageWidth: maxW };
+        } catch { /* getPhotoCapabilities optional */ }
+
+        const blob   = await imageCapture.takePhoto(photoSettings);
+        const bitmap = await createImageBitmap(blob);
+        const ok     = preprocessBitmap(bitmap, canvas);
+        bitmap.close();
+        return ok;
+      } catch (err) {
+        log.warn('main', `Foto-Capture fehlgeschlagen [${err.name}] – Video-Frame Fallback`);
+      }
+    }
+    return preprocessFrame(video, canvas);
+  }
+
+  // Aufgenommenes scharfes Foto kurz als Bestätigung zeigen
+  function showCapturedPhoto() {
+    canvas.classList.add('review');
+    setTimeout(() => {
+      canvas.classList.remove('review');
+      previewFrozen = false;
+    }, 1500);
+  }
 
   // Standalone-Modus: Modal- und Status-Handler registrieren
   if (!productId) {
@@ -306,13 +342,19 @@ async function main() {
       return;
     }
     log.info('main', `Scan ausgelöst – mode=${userMode ?? 'id'}`);
-    if (!preprocessFrame(video, canvas)) {
-      log.warn('main', 'Scan abgebrochen – kein Video-Frame verfügbar');
-      return;
-    }
     scanBtn.disabled = true;
     scanBtn.textContent = 'Scannt…';
     setStatus('Scannt…', 'working');
+    previewFrozen = true;
+    const captured = await captureToCanvas();
+    if (!captured) {
+      log.warn('main', 'Scan abgebrochen – kein Bild verfügbar');
+      previewFrozen = false;
+      scanBtn.disabled = false;
+      scanBtn.textContent = 'Scannen';
+      setStatus('Kein Bild – erneut versuchen', 'error');
+      return;
+    }
     // Panels zurücksetzen vor neuem Scan
     showSupplierLinks([], '');
     showLookupButton(false);
@@ -345,6 +387,7 @@ async function main() {
         }
       }
     });
+    showCapturedPhoto();
     scanBtn.disabled = false;
     scanBtn.textContent = 'Scannen';
     if (!lastText) setStatus('Kein REF gefunden – erneut versuchen', 'error');

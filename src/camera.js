@@ -13,6 +13,7 @@ export async function startCamera(videoEl) {
   await videoEl.play();
 
   const track = stream.getVideoTracks()[0];
+  let imageCapture = null;
   if (track) {
     const s = track.getSettings?.() ?? {};
     log.info('camera', `Stream: ${s.width ?? '?'}×${s.height ?? '?'}px, facing=${s.facingMode ?? '?'}, label="${track.label}"`);
@@ -25,9 +26,23 @@ export async function startCamera(videoEl) {
         track.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] }).catch(() => {});
       }
     });
+
+    // Foto-Pipeline: takePhoto() löst einen vollständigen AF-Zyklus aus
+    // → scharfes Standbild auch bei Nahaufnahme (Video-Frame ist es nicht).
+    if ('ImageCapture' in window) {
+      try {
+        imageCapture = new ImageCapture(track);
+        log.info('camera', 'Foto-Modus aktiv (ImageCapture.takePhoto)');
+      } catch (err) {
+        imageCapture = null;
+        log.warn('camera', `ImageCapture nicht nutzbar [${err.name}] – Video-Frame Fallback`);
+      }
+    } else {
+      log.warn('camera', 'ImageCapture nicht unterstützt – Video-Frame Fallback');
+    }
   }
 
-  return stream;
+  return { stream, track, imageCapture };
 }
 
 export function stopCamera(stream) {
