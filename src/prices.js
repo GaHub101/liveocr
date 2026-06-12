@@ -55,9 +55,11 @@ export async function addProduct(payload) {
 export async function getProductSuppliers(productId) {
   try {
     const data = await post({ action: 'getProductSuppliers', id: productId });
-    const count = data.suppliers?.length ?? 0;
-    log.info('prices', `getProductSuppliers: id=${productId} → ${count} Lieferant${count !== 1 ? 'en' : ''}`);
-    return data.suppliers || [];
+    const suppliers = data.suppliers || [];
+    const count = suppliers.length;
+    const withPrice = suppliers.filter(s => typeof s.price === 'number').length;
+    log.info('prices', `getProductSuppliers: id=${productId} → ${count} Lieferant${count !== 1 ? 'en' : ''}, ${withPrice} mit Preis`);
+    return suppliers;
   } catch (err) {
     log.warn('prices', `getProductSuppliers fehlgeschlagen: id=${productId} – ${err.message}`);
     return [];
