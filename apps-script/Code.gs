@@ -53,10 +53,14 @@ function doPost(e) {
 
     var payload = JSON.parse(e.postData.contents);
 
-    var secret = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
+    // pushPrices kommt vom externen Scraper-Dienst (nicht vom Client) und wird
+    // gegen ein separates Secret geprüft, NICHT gegen das client-sichtbare
+    // WEBHOOK_SECRET.
+    var secretPropName = (payload.action === 'pushPrices') ? 'SCRAPER_PUSH_SECRET' : 'WEBHOOK_SECRET';
+    var secret = PropertiesService.getScriptProperties().getProperty(secretPropName);
     if (!secret) {
-      Logger.log('doPost: WEBHOOK_SECRET nicht konfiguriert – Zugriff verweigert');
-      logUsage('auth', 'error', 'WEBHOOK_SECRET fehlt in Script Properties');
+      Logger.log('doPost: ' + secretPropName + ' nicht konfiguriert – Zugriff verweigert');
+      logUsage('auth', 'error', secretPropName + ' fehlt in Script Properties');
       return jsonResponse({ status: 'error', message: 'Server-Konfigurationsfehler: Secret nicht gesetzt' });
     }
 
@@ -112,6 +116,10 @@ function doPost(e) {
 
     if (payload.action === 'setStatus') {
       return handleSetStatus(payload);
+    }
+
+    if (payload.action === 'pushPrices') {
+      return handlePushPrices(payload);
     }
 
     if (payload.id) {
@@ -585,6 +593,10 @@ function handleGetProductSuppliers(payload) {
   for (var r = 1; r < bData.length; r++) {
     if (String(bData[r][ID_COL_INDEX]) !== id) continue;
 
+    // REF dieser Zeile (Spalte F) – Schlüssel für den Preis-Cache
+    var rowRef = String(bData[r][REF_COL - 1] || '').trim();
+    var priceMap = buildPriceMap(ss, rowRef);
+
     // Hauptlieferant (Spalte E) + Alternativen (Spalten N–Q) sammeln, mit Dedup
     var colIdxs = [HAUPTLIEFERANT_COL_IDX].concat(ALT_LIEFERANT_COL_IDXS);
     var suppliers = [];
@@ -595,15 +607,112 @@ function handleGetProductSuppliers(payload) {
       var key = name.toLowerCase();
       if (seen[key]) continue;   // bereits gelistet — Hauptlieferant wins (zuerst iteriert)
       seen[key] = true;
-      suppliers.push({ name: name, baseUrl: urlMap[name], primary: c === 0 });
+
+      var p = priceMap[key] || null;
+      suppliers.push({
+        name: name,
+        baseUrl: urlMap[name],
+        primary: c === 0,
+        price:        p ? p.price : null,
+        currency:     p ? p.currency : 'EUR',
+        availability: p ? p.availability : '',
+        productUrl:   p ? p.productUrl : '',
+        priceStatus:  p ? p.status : null,
+        priceStand:   p ? p.stand : null
+      });
     }
 
-    logUsage('getProductSuppliers', 'ok', 'id=' + id + ' count=' + suppliers.length);
+    var withPrice = 0;
+    for (var s = 0; s < suppliers.length; s++) { if (typeof suppliers[s].price === 'number') withPrice++; }
+    logUsage('getProductSuppliers', 'ok', 'id=' + id + ' count=' + suppliers.length + ' preise=' + withPrice);
     return jsonResponse({ status: 'ok', suppliers: suppliers });
   }
 
   logUsage('getProductSuppliers', 'not_found', 'id=' + id);
   return jsonResponse({ status: 'not_found', suppliers: [] });
+}
+
+// ---------------------------------------------------------------------------
+// Preis-Cache lesen (Sheet "Preise") → Map lieferantLower → Preisobjekt
+// ---------------------------------------------------------------------------
+
+function buildPriceMap(ss, ref) {
+  var map = {};
+  if (!ref) return map;
+  var sheet = ss.getSheetByName('Preise');
+  if (!sheet) return map;
+
+  var data = sheet.getDataRange().getValues();
+  var refStr = String(ref);
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][1]) !== refStr) continue;   // Spalte B = REF
+    var supLower = String(data[i][0]).toLowerCase();   // Spalte A = Lieferant
+    var rawPrice = data[i][2];                          // Spalte C = Preis
+    var price = (rawPrice === '' || rawPrice == null) ? null : Number(rawPrice);
+    if (price != null && isNaN(price)) price = null;
+    map[supLower] = {
+      price:        price,
+      currency:     String(data[i][3] || 'EUR'),       // D
+      availability: String(data[i][4] || ''),          // E
+      productUrl:   String(data[i][5] || ''),          // F
+      stand:        String(data[i][6] || ''),          // G
+      status:       String(data[i][7] || '')           // H
+    };
+  }
+  return map;
+}
+
+// ---------------------------------------------------------------------------
+// Preise vom externen Scraper-Dienst entgegennehmen (Push-Modell)
+// Erwartet: { shop, results: [{ ref, status, price, currency, availability, productUrl }] }
+// Secret-Prüfung erfolgt in doPost gegen SCRAPER_PUSH_SECRET.
+// ---------------------------------------------------------------------------
+
+function handlePushPrices(payload) {
+  var shop = String(payload.shop || '').trim();
+  if (!shop) {
+    logUsage('pushPrices', 'error', 'shop fehlt');
+    return jsonResponse({ status: 'error', message: 'shop fehlt' });
+  }
+
+  // Shop muss in PreisConfig mit Modus "external" existieren
+  var config = getShopConfig(shop);
+  if (!config) {
+    logUsage('pushPrices', 'error', 'Unbekannter Shop: ' + shop);
+    return jsonResponse({ status: 'error', message: 'Shop nicht in PreisConfig' });
+  }
+  if (config.mode !== 'external') {
+    logUsage('pushPrices', 'error', 'Shop nicht im external-Modus: ' + shop);
+    return jsonResponse({ status: 'error', message: 'Shop ist nicht als external konfiguriert' });
+  }
+
+  var results = payload.results;
+  if (!results || !results.length) {
+    return jsonResponse({ status: 'ok', written: 0 });
+  }
+
+  var written = 0;
+  for (var i = 0; i < results.length; i++) {
+    var item = results[i] || {};
+    var ref = String(item.ref || '').trim();
+    if (!ref || !REF_PATTERN.test(ref)) continue;
+
+    var price = (item.price === '' || item.price == null) ? null : Number(item.price);
+    if (price != null && isNaN(price)) price = null;
+
+    upsertPriceRow(shop, ref, {
+      status:       String(item.status || (price != null ? 'ok' : 'not_found')),
+      price:        price,
+      currency:     String(item.currency || 'EUR'),
+      availability: String(item.availability || ''),
+      productUrl:   String(item.productUrl || ''),
+      error:        String(item.error || '')
+    });
+    written++;
+  }
+
+  logUsage('pushPrices', 'ok', 'shop=' + shop + ' written=' + written);
+  return jsonResponse({ status: 'ok', written: written });
 }
 
 // ---------------------------------------------------------------------------

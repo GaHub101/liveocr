@@ -70,26 +70,60 @@ export function hideProductBanner() {
   productBanner.classList.remove('visible');
 }
 
+// Kurztext für Preis-Status (nicht „ok")
+const PRICE_STATUS_LABEL = {
+  not_found:    'nicht gelistet',
+  pattern_miss: 'Preis n. verf.',
+  login_failed: 'Login-Fehler',
+  http_error:   'Abruf-Fehler',
+};
+
 export function showSupplierLinks(suppliers, ref) {
   const panel = document.getElementById('avail-panel');
   const list  = document.getElementById('avail-list');
+  const stand = document.getElementById('avail-stand');
   if (!panel || !list) return;
 
   list.innerHTML = '';
+  if (stand) { stand.style.display = 'none'; stand.textContent = ''; }
 
   if (!suppliers || suppliers.length === 0 || !ref) {
     panel.style.display = 'none';
     return;
   }
 
+  // Günstigsten Preis für Hervorhebung bestimmen
+  const prices = suppliers
+    .map(s => (typeof s.price === 'number' ? s.price : null))
+    .filter(p => p != null);
+  const cheapest = prices.length ? Math.min(...prices) : null;
+
+  // Ältesten „Stand" für die Fußzeile bestimmen
+  let oldestStand = null;
+
   suppliers.forEach(s => {
     const row = document.createElement('div');
     row.className = 'avail-row';
     if (s.primary) row.classList.add('avail-row--primary');
+    if (typeof s.price === 'number' && s.price === cheapest) {
+      row.classList.add('avail-row--cheapest');
+    }
 
     const name = document.createElement('span');
     name.className   = 'avail-name';
     name.textContent = s.name;
+
+    const price = document.createElement('span');
+    price.className = 'avail-price';
+    if (typeof s.price === 'number') {
+      price.textContent = s.price.toLocaleString('de-DE', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2,
+      }) + ' ' + (s.currency || 'EUR');
+    } else if (s.priceStatus && PRICE_STATUS_LABEL[s.priceStatus]) {
+      price.classList.add('avail-price--na');
+      price.textContent = PRICE_STATUS_LABEL[s.priceStatus];
+      price.title = 'Status: ' + s.priceStatus;
+    }
 
     const a = document.createElement('a');
     a.className   = 'avail-link';
@@ -99,9 +133,25 @@ export function showSupplierLinks(suppliers, ref) {
     a.textContent = 'Öffnen →';
 
     row.appendChild(name);
+    row.appendChild(price);
     row.appendChild(a);
     list.appendChild(row);
+
+    if (s.priceStand && (!oldestStand || s.priceStand < oldestStand)) {
+      oldestStand = s.priceStand;
+    }
   });
+
+  if (stand && oldestStand && prices.length) {
+    const d = new Date(oldestStand);
+    if (!isNaN(d)) {
+      stand.textContent = 'Preise Stand: ' + d.toLocaleString('de-DE', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+      stand.style.display = 'block';
+    }
+  }
 
   panel.style.display = 'block';
 }
