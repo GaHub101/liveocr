@@ -198,7 +198,6 @@ export function applyLookupSuggestion(suggestion) {
   const s = suggestion || {};
   if (s.hersteller)  document.getElementById('lk-manu').value = s.hersteller;
   if (s.artikelname) document.getElementById('lk-name').value = s.artikelname;
-  if (s.kategorie)   document.getElementById('lk-cat').value  = s.kategorie;
   // Herstellername aus Artikelname entfernen
   const nameEl = document.getElementById('lk-name');
   const manuEl = document.getElementById('lk-manu');

@@ -462,10 +462,9 @@ function handleLookupProduct(payload) {
     + 'Suche im Web nach diesem Produkt: "' + suchbegriff + ' ' + ref + '". '
     + 'Bestimme aus den Suchergebnissen: '
     + 'hersteller (gängiger Markenname OHNE Rechtsform-Suffixe wie Inc., AG, GmbH, Corporation, Corp., Ltd., Co., SA, NV — z.B. "Ormco" statt "Ormco Inc.", "3M" statt "3M Company"), '
-    + 'artikelname (offizielle Produktbezeichnung für diese REF), '
-    + 'kategorie (z.B. Brackets, Bänder, Drähte, Instrumente, Verbrauchsmaterial).'
+    + 'artikelname (offizielle Produktbezeichnung für diese REF).'
     + supplierClause
-    + ' Antworte NUR als JSON: {"hersteller":"","artikelname":"","kategorie":"","alt_lieferanten":[]}. '
+    + ' Antworte NUR als JSON: {"hersteller":"","artikelname":"","alt_lieferanten":[]}. '
     + 'Unbekannte Felder = leerer String bzw. leeres Array. Keine Spekulation.';
 
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
