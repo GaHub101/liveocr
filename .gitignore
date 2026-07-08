@@ -3,3 +3,8 @@ dist/
 .env.local
 .env.production
 *.local
+
+# Scraper (scraper/)
+scraper/.env
+scraper/scrape.log
+scraper/debug/
