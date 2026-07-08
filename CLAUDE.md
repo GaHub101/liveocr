@@ -39,7 +39,7 @@ Camera (getUserMedia, rear-facing)
 
 Standalone mode (no ?id=):
   → main.js    – mode-selector ("Was möchten Sie tun?") with three options A / B / C
-  → A) Produkt hinzufügen   – scan → lookupProduct() ∥ verifySuppliers() (parallel) → modal with supplier dropdown → addProduct()
+  → A) Produkt hinzufügen   – scan → modal opens directly (REF prefilled) → manual Hersteller input → lookupProduct() → addProduct()
   → B) Produkt suchen       – scan → checkRef() → on hit: status modal (values from Bestellstatus tab) → setStatus()
                                                   on miss: "Neues Produkt anlegen" button (falls back to A)
   → C) Nachbestellen        – scan → checkRef() → supplier links + "Nachbestellen" button → markReorder()
@@ -54,11 +54,11 @@ Standalone mode (no ?id=):
 | `src/canvas.js` | Crop to scan zone (80%×60%, centred) + 20 px white padding. Sends colour image directly to Gemini – no grayscale or binarisation. |
 | `src/ocr.js` | Gemini 2.5 Flash-Lite via Apps Script webhook. Canvas frame → downscaled 50 % → JPEG (q0.7) → base64 → POST. Prompt is hardcoded server-side. |
 | `src/send.js` | `fetch()` without `Content-Type` header (simple request, no CORS preflight). Offline queue in `localStorage` (`ocr_send_queue`), auto-flush on `online` event |
-| `src/prices.js` | `checkRef`, `lookupProduct`, `verifySuppliers`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setOrderStatus` – all POST to Apps Script |
+| `src/prices.js` | `checkRef`, `lookupProduct`, `addProduct`, `getProductSuppliers`, `markReorder`, `bootstrap`, `listSuppliers`, `listStatusValues`, `setOrderStatus` – all POST to Apps Script. `bootstrap` fetches all dropdown data in one request; cached in `localStorage` (`ocr_bootstrap_cache`) for instant startup |
 | `src/logger.js` | Ring-buffer log, max. 300 entries, `localStorage`. Debug overlay via `?debug` URL param |
 | `src/ui.js` | DOM updates: status, result, banner, queue badge, supplier links, lookup modal, mode-selector, status modal, supplier dropdown |
 | `src/main.js` | Entry point. URL params: `?id=` (write+reorder), `?name=` (banner), `?debug`. Standalone shows mode-selector first; selected mode (`add`/`search`/`reorder`) branches the post-scan flow. |
-| `apps-script/Code.gs` | Google Apps Script webhook. Actions: `ocr`, `checkRef`/`search`, `lookupProduct`, `verifySuppliers`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setStatus`, `writeRef` (id present), `appendLog` (standalone) |
+| `apps-script/Code.gs` | Google Apps Script webhook. Actions: `ocr`, `checkRef`/`search`, `lookupProduct`, `bootstrap`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setStatus`, `writeRef` (id present), `appendLog` (standalone) |
 
 ### OCR configuration
 

@@ -30,7 +30,6 @@ var STATUS_COL               = 9;   // Spalte I, Bestellstatus (1-based)
 var ID_COL_INDEX             = 0;   // Spalte A (0-based)
 var HAUPTLIEFERANT_COL_IDX   = 4;   // Spalte E (0-based)
 var ALT_LIEFERANT_COL_IDXS   = [13, 14, 15, 16];  // Spalten N–Q (0-based)
-var MAX_VERIFY_SUPPLIERS     = 10;  // Obergrenze Lieferanten pro Verifikations-Request (Latenz)
 
 // [FIX] Konservativeres Limit: ~5 MB dekodiert → ~6.7 MB Base64
 var MAX_BASE64_LENGTH  = 6.7 * 1024 * 1024;
@@ -87,8 +86,8 @@ function doPost(e) {
       return handleLookupProduct(payload);
     }
 
-    if (payload.action === 'verifySuppliers') {
-      return handleVerifySuppliers(payload);
+    if (payload.action === 'bootstrap') {
+      return handleBootstrap();
     }
 
     if (payload.action === 'addProduct') {
@@ -479,71 +478,36 @@ function handleLookupProduct(payload) {
 }
 
 // ---------------------------------------------------------------------------
-// Lieferanten-Verifikation (läuft clientseitig parallel zu lookupProduct)
+// Bootstrap – alle Dropdown-Daten in einem einzigen Request (Startup-Beschleunigung)
 // ---------------------------------------------------------------------------
 
-function handleVerifySuppliers(payload) {
-  var ref         = String(payload.ref        || '').trim();
-  var suchbegriff = String(payload.hersteller || '').trim();
-  if (!ref) return jsonResponse({ status: 'error', message: 'ref fehlt' });
+function handleBootstrap() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-  if (!apiKey) return jsonResponse({ status: 'ok', alt_lieferanten: [] });
-
-  // Lieferantenliste lesen, begrenzt auf MAX_VERIFY_SUPPLIERS Einträge
-  var supplierNames = [];
-  var lSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SUPPLIERS_SHEET);
-  if (lSheet) {
-    var lData = lSheet.getDataRange().getValues();
-    for (var i = 1; i < lData.length && supplierNames.length < MAX_VERIFY_SUPPLIERS; i++) {
-      var n = String(lData[i][0]).trim();
-      if (n) supplierNames.push(n);
+  function columnA(sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return [];
+    var data = sheet.getDataRange().getValues();
+    var vals = [];
+    for (var i = 1; i < data.length; i++) {
+      var v = String(data[i][0] || '').trim();
+      if (v) vals.push(v);
     }
+    return vals;
   }
-  if (supplierNames.length === 0) return jsonResponse({ status: 'ok', alt_lieferanten: [] });
 
-  var prompt = 'Du bist Experte für medizinische/zahnmedizinische Produkte. '
-    + 'Produkt: "' + suchbegriff + ' ' + ref + '". '
-    + 'Prüfe anhand der Web-Suche, welche der folgenden Lieferanten dieses Produkt '
-    + 'nachweislich im Sortiment führen (Distributor-Listen, Online-Shop-Treffer): '
-    + supplierNames.join(', ') + '. '
-    + 'Liste in "alt_lieferanten" max. 4 Namen (exakte Schreibweise). '
-    + 'Nur tatsächlich verifizierte Lieferanten — KEINE Schätzung anhand Sortiments-Schwerpunkt. '
-    + 'Wenn keine Verifikation möglich: leeres Array []. '
-    + 'Antworte NUR als JSON: {"alt_lieferanten":[]}.';
+  var suppliers    = columnA(SUPPLIERS_SHEET);
+  var locations    = columnA(LAGERORT_SHEET);
+  var statusValues = columnA(STATUS_SHEET);
 
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
-  var body = {
-    contents: [{ parts: [{ text: prompt }] }],
-    tools: [{ google_search: {} }],
-    generationConfig: { maxOutputTokens: 200, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
-  };
-
-  try {
-    var resp     = UrlFetchApp.fetch(url, {
-      method: 'POST', contentType: 'application/json',
-      payload: JSON.stringify(body), muteHttpExceptions: true
-    });
-    var result    = JSON.parse(resp.getContentText());
-    var rParts    = (result.candidates && result.candidates[0] &&
-                     result.candidates[0].content && result.candidates[0].content.parts) || [];
-    var textParts = rParts.filter(function(p) { return !p.thought && p.text; });
-    var raw       = textParts.length > 0 ? textParts[textParts.length - 1].text.trim() : '{}';
-    var jsonMatch = raw.match(/\{[\s\S]*\}/);
-    var parsed    = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
-    var alts      = Array.isArray(parsed.alt_lieferanten) ? parsed.alt_lieferanten : [];
-    // Nur Namen zulassen, die exakt in der Lieferantenliste stehen
-    alts = alts.map(function(n) { return String(n).trim(); })
-               .filter(function(n) { return supplierNames.indexOf(n) !== -1; })
-               .slice(0, 4);
-
-    logUsage('verifySuppliers', 'ok', 'ref=' + ref + ' alts=' + alts.length);
-    return jsonResponse({ status: 'ok', alt_lieferanten: alts });
-  } catch (err) {
-    Logger.log('handleVerifySuppliers ERROR: ' + err.message);
-    logUsage('verifySuppliers', 'error', err.message);
-    return jsonResponse({ status: 'ok', alt_lieferanten: [] });
-  }
+  logUsage('bootstrap', 'ok',
+    'suppliers=' + suppliers.length + ' locations=' + locations.length + ' status=' + statusValues.length);
+  return jsonResponse({
+    status: 'ok',
+    suppliers: suppliers,
+    locations: locations,
+    statusValues: statusValues
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -565,14 +529,17 @@ function handleAddProduct(payload) {
   }
 
   try {
-    var data = sheet.getDataRange().getValues();
-    for (var i = 1; i < data.length; i++) {
-      if (String(data[i][REF_COL - 1]).trim() === ref) {
+    // Duplikat-Check per TextFinder nur auf Spalte F – schneller als das ganze Sheet zu lesen
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      var dup = sheet.getRange(2, REF_COL, lastRow - 1, 1)
+        .createTextFinder(ref).matchEntireCell(true).findNext();
+      if (dup) {
         return jsonResponse({ status: 'already_exists', message: 'REF bereits vorhanden' });
       }
     }
 
-    var newId = sheet.getLastRow();  // neue Zeile = lastRow+1, ID = lastRow (ROW()-1 Formel)
+    var newId = lastRow;  // neue Zeile = lastRow+1, ID = lastRow (ROW()-1 Formel)
     var row = [
       newId,
       String(payload.name           || ''),  // B: Artikelname

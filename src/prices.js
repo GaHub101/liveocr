@@ -44,15 +44,20 @@ export async function lookupProduct(ref, hersteller = '') {
   }
 }
 
-export async function verifySuppliers(ref, hersteller = '') {
+// Alle Dropdown-Daten in einem Request; null bei Fehler (Aufrufer nutzt Fallback)
+export async function bootstrap() {
   try {
-    const data = await post({ action: 'verifySuppliers', ref, hersteller });
-    const alts = Array.isArray(data.alt_lieferanten) ? data.alt_lieferanten : [];
-    log.info('prices', `verifySuppliers: ref="${ref}" → ${alts.length} Lieferant${alts.length !== 1 ? 'en' : ''}`);
-    return alts;
+    const data = await post({ action: 'bootstrap' });
+    if (data.status !== 'ok') return null;
+    log.info('prices', `bootstrap: ${data.suppliers?.length ?? 0} Lieferanten, ${data.locations?.length ?? 0} Lagerorte, ${data.statusValues?.length ?? 0} Statuswerte`);
+    return {
+      suppliers:    data.suppliers    || [],
+      locations:    data.locations    || [],
+      statusValues: data.statusValues || [],
+    };
   } catch (err) {
-    log.warn('prices', `verifySuppliers fehlgeschlagen: ref="${ref}" – ${err.message}`);
-    return [];
+    log.warn('prices', `bootstrap fehlgeschlagen: ${err.message}`);
+    return null;
   }
 }
 
