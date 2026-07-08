@@ -56,11 +56,9 @@ Standalone mode (no ?id=):
 | `src/send.js` | `fetch()` without `Content-Type` header (simple request, no CORS preflight). Offline queue in `localStorage` (`ocr_send_queue`), auto-flush on `online` event |
 | `src/prices.js` | `checkRef`, `lookupProduct`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setOrderStatus` – all POST to Apps Script |
 | `src/logger.js` | Ring-buffer log, max. 300 entries, `localStorage`. Debug overlay via `?debug` URL param |
-| `src/ui.js` | DOM updates: status, result, banner, queue badge, supplier links (incl. cached prices + cheapest highlight + "Stand" footer), lookup modal, mode-selector, status modal, supplier dropdown |
+| `src/ui.js` | DOM updates: status, result, banner, queue badge, supplier links, lookup modal, mode-selector, status modal, supplier dropdown |
 | `src/main.js` | Entry point. URL params: `?id=` (write+reorder), `?name=` (banner), `?debug`. Standalone shows mode-selector first; selected mode (`add`/`search`/`reorder`) branches the post-scan flow. |
-| `apps-script/Code.gs` | Google Apps Script webhook. Actions: `ocr`, `checkRef`/`search`, `lookupProduct`, `addProduct`, `getProductSuppliers` (enriched with cached prices), `markReorder`, `listSuppliers`, `listStatusValues`, `setStatus`, `getWorkList` + `pushPrices` (external scraper, `SCRAPER_PUSH_SECRET`), `writeRef` (id present), `appendLog` (standalone) |
-| `apps-script/Preise.gs` | Price comparison: nightly trigger (`refreshPrices`) logs into supplier webshops via `UrlFetchApp` (form login + cookie jar), scrapes prices for `Nachbestellen` products, writes them to the `Preise` sheet. Setup helpers: `setupPriceSheets`, `installPriceTrigger`, `testShopScrape`. `handleGetWorkList` serves the external scraper its work list. |
-| `scraper/` | Standalone Node.js service for `external` shops (out of the nightly trigger). Pulls `getWorkList`, scrapes prices per shop in `http` (fetch + cheerio/regex) or `browser` (Playwright) mode, pushes back via `pushPrices`. Runs locally / on a Raspberry Pi via cron. See `scraper/README.md`. |
+| `apps-script/Code.gs` | Google Apps Script webhook. Actions: `ocr`, `checkRef`/`search`, `lookupProduct`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setStatus`, `writeRef` (id present), `appendLog` (standalone) |
 
 ### OCR configuration
 
@@ -105,49 +103,6 @@ Sheet `Bestellstatus` structure (values for Option B status dropdown):
 Column A from row 2 lists the allowed values for column I of `Bestellungen`. Header in row 1. The `setStatus` action validates incoming values against this list.
 
 Populate column A of `Bestellungen` with `=ROW()-1` from A2 downwards. IDs must not change. Deploy as Web App (Execute as: Me, Access: Anyone).
-
-### Price comparison (`apps-script/Preise.gs`)
-
-A nightly time-driven trigger logs into each supplier webshop and scrapes the price (visible only after login) into a cache sheet. `getProductSuppliers` is enriched server-side with these cached prices, so both client call sites (Reorder mode, `?id=` mode) show them without an extra roundtrip — `showSupplierLinks` renders price, cheapest highlight (green) and a "Preise Stand: …" footer.
-
-**Only products with `Bestellstatus == "Nachbestellen"` (column I) are scraped** — keeps request volume low (reduces rate-based bot detection) and limits work to relevant items.
-
-Sheet `Preise` (cache, written by the trigger; upsert key = Lieferant+REF):
-
-| A | B | C | D | E | F | G | H | I |
-|---|---|---|---|---|---|---|---|---|
-| Lieferant | REF | Preis | Währung | Verfügbarkeit | Produkt-URL | Stand (ISO) | Status | Fehler |
-
-`Status`: `ok` \| `not_found` \| `pattern_miss` \| `login_failed` \| `http_error`.
-
-Sheet `PreisConfig` (maintained by owner, one shop per row):
-
-| A | B | C | D | E | F | G | H | I | J |
-|---|---|---|---|---|---|---|---|---|---|
-| Lieferant | Modus | Login-Seite-URL | Login-URL | Login-Payload | Token-Regex | Such-URL-Template | Preis-Regex | Login-Check-Regex | Aktiv |
-
-- `Lieferant` must match `Lieferanten` column A exactly. `Modus`: `apps_script` \| `external`.
-- `Login-Payload`: form-encoded template, e.g. `email={{user}}&password={{pass}}&_csrf_token={{token}}`. `{{user}}`/`{{pass}}` come from Script Properties, `{{token}}` is captured from the login page via `Token-Regex` (capture group 1).
-- `Such-URL-Template`: e.g. `https://shop.de/search?q={{ref}}`. `Preis-Regex`: capture group 1 = price string (parsed via `parseGermanPrice`).
-- `Login-Check-Regex` (optional): a pattern only present when logged in (e.g. `Mein Konto`); a miss triggers one re-login + retry.
-
-**Script Properties** (in addition to `WEBHOOK_SECRET`/`GEMINI_API_KEY`):
-- `SHOP_CRED_<KEY>` = JSON `{"user":"…","pass":"…"}` per shop. `<KEY>` = supplier name uppercased, umlauts transliterated, non-alphanumerics → `_` (helper `shopCredKey`, e.g. "Henry Schein" → `SHOP_CRED_HENRY_SCHEIN`). Credentials are never sent to the client.
-- `SCRAPER_PUSH_SECRET` = separate secret for the external scraper push interface (NOT the client-visible `WEBHOOK_SECRET`).
-
-**Owner setup checklist**:
-1. Copy `apps-script/Preise.gs` into the Apps Script project, update `Code.gs`, re-deploy the existing deployment (same URL).
-2. Run `setupPriceSheets()` once → creates `Preise` + `PreisConfig`. Fill `PreisConfig` per shop (URLs/regex via the logged-in shop's browser DevTools).
-3. Set Script Properties; run `testShopScrape('<Name>', '<known REF>')` per shop and check the execution log (HTTP codes, cookie names, regex match, parsed price).
-4. Run `installPriceTrigger()` once and approve permissions.
-
-**External scraper interface** (service lives in `scraper/`): shops with bot protection / JS-rendered prices set `Modus = external` (the nightly trigger skips them). Two scraper-only actions, both authenticated against `SCRAPER_PUSH_SECRET` (never the client-visible `WEBHOOK_SECRET`), POSTed with no `Content-Type` header / JSON body:
-> - `getWorkList` `{ action: 'getWorkList', secret, shop? }` → `handleGetWorkList` returns `{ status:'ok', items:[{ shop, ref, searchTemplate, stand }] }` for all active `external` shops with status `Nachbestellen` (optional `shop` filter).
-> - `pushPrices` `{ action:'pushPrices', secret, shop, results:[{ ref, status, price, currency, availability, productUrl }] }` → `handlePushPrices` validates the shop is `external`, checks each `ref` against `REF_PATTERN`, and upserts into `Preise`.
->
-> The scraper (`scraper/`, standalone Node package) pulls the work list, scrapes each shop in `http` or `browser` (Playwright) mode per `scraper/shops.config.js`, and pushes results back. Credentials live in `scraper/.env` as `SHOP_CRED_<KEY>` (same key derivation as server-side). Runs locally / on a Pi via cron; `--debug` / `--dry-run` / per-REF debug dumps under `scraper/debug/`. See `scraper/README.md`.
-
-> Hinweis: Automated scraping may conflict with a shop's terms of service. Use your own B2B accounts at a low frequency (1×/day).
 
 ### CI/CD
 
