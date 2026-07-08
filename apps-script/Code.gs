@@ -53,10 +53,11 @@ function doPost(e) {
 
     var payload = JSON.parse(e.postData.contents);
 
-    // pushPrices kommt vom externen Scraper-Dienst (nicht vom Client) und wird
-    // gegen ein separates Secret geprüft, NICHT gegen das client-sichtbare
-    // WEBHOOK_SECRET.
-    var secretPropName = (payload.action === 'pushPrices') ? 'SCRAPER_PUSH_SECRET' : 'WEBHOOK_SECRET';
+    // pushPrices/getWorkList kommen vom externen Scraper-Dienst (nicht vom
+    // Client) und werden gegen ein separates Secret geprüft, NICHT gegen das
+    // client-sichtbare WEBHOOK_SECRET.
+    var usesScraperSecret = (payload.action === 'pushPrices' || payload.action === 'getWorkList');
+    var secretPropName = usesScraperSecret ? 'SCRAPER_PUSH_SECRET' : 'WEBHOOK_SECRET';
     var secret = PropertiesService.getScriptProperties().getProperty(secretPropName);
     if (!secret) {
       Logger.log('doPost: ' + secretPropName + ' nicht konfiguriert – Zugriff verweigert');
@@ -116,6 +117,10 @@ function doPost(e) {
 
     if (payload.action === 'setStatus') {
       return handleSetStatus(payload);
+    }
+
+    if (payload.action === 'getWorkList') {
+      return handleGetWorkList(payload);
     }
 
     if (payload.action === 'pushPrices') {

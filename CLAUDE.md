@@ -58,8 +58,9 @@ Standalone mode (no ?id=):
 | `src/logger.js` | Ring-buffer log, max. 300 entries, `localStorage`. Debug overlay via `?debug` URL param |
 | `src/ui.js` | DOM updates: status, result, banner, queue badge, supplier links (incl. cached prices + cheapest highlight + "Stand" footer), lookup modal, mode-selector, status modal, supplier dropdown |
 | `src/main.js` | Entry point. URL params: `?id=` (write+reorder), `?name=` (banner), `?debug`. Standalone shows mode-selector first; selected mode (`add`/`search`/`reorder`) branches the post-scan flow. |
-| `apps-script/Code.gs` | Google Apps Script webhook. Actions: `ocr`, `checkRef`/`search`, `lookupProduct`, `addProduct`, `getProductSuppliers` (enriched with cached prices), `markReorder`, `listSuppliers`, `listStatusValues`, `setStatus`, `pushPrices` (external scraper), `writeRef` (id present), `appendLog` (standalone) |
-| `apps-script/Preise.gs` | Price comparison: nightly trigger (`refreshPrices`) logs into supplier webshops via `UrlFetchApp` (form login + cookie jar), scrapes prices for `Nachbestellen` products, writes them to the `Preise` sheet. Setup helpers: `setupPriceSheets`, `installPriceTrigger`, `testShopScrape`. |
+| `apps-script/Code.gs` | Google Apps Script webhook. Actions: `ocr`, `checkRef`/`search`, `lookupProduct`, `addProduct`, `getProductSuppliers` (enriched with cached prices), `markReorder`, `listSuppliers`, `listStatusValues`, `setStatus`, `getWorkList` + `pushPrices` (external scraper, `SCRAPER_PUSH_SECRET`), `writeRef` (id present), `appendLog` (standalone) |
+| `apps-script/Preise.gs` | Price comparison: nightly trigger (`refreshPrices`) logs into supplier webshops via `UrlFetchApp` (form login + cookie jar), scrapes prices for `Nachbestellen` products, writes them to the `Preise` sheet. Setup helpers: `setupPriceSheets`, `installPriceTrigger`, `testShopScrape`. `handleGetWorkList` serves the external scraper its work list. |
+| `scraper/` | Standalone Node.js service for `external` shops (out of the nightly trigger). Pulls `getWorkList`, scrapes prices per shop in `http` (fetch + cheerio/regex) or `browser` (Playwright) mode, pushes back via `pushPrices`. Runs locally / on a Raspberry Pi via cron. See `scraper/README.md`. |
 
 ### OCR configuration
 
@@ -140,7 +141,11 @@ Sheet `PreisConfig` (maintained by owner, one shop per row):
 3. Set Script Properties; run `testShopScrape('<Name>', '<known REF>')` per shop and check the execution log (HTTP codes, cookie names, regex match, parsed price).
 4. Run `installPriceTrigger()` once and approve permissions.
 
-**External scraper interface** (service itself out of scope): shops with bot protection / JS-rendered prices set `Modus = external` (the trigger skips them). The external service POSTs (no `Content-Type` header, JSON body) `{ action: 'pushPrices', secret: '<SCRAPER_PUSH_SECRET>', shop, results: [{ ref, status, price, currency, availability, productUrl }] }`. `handlePushPrices` validates the shop is `external`, checks each `ref` against `REF_PATTERN`, and upserts into `Preise`.
+**External scraper interface** (service lives in `scraper/`): shops with bot protection / JS-rendered prices set `Modus = external` (the nightly trigger skips them). Two scraper-only actions, both authenticated against `SCRAPER_PUSH_SECRET` (never the client-visible `WEBHOOK_SECRET`), POSTed with no `Content-Type` header / JSON body:
+> - `getWorkList` `{ action: 'getWorkList', secret, shop? }` → `handleGetWorkList` returns `{ status:'ok', items:[{ shop, ref, searchTemplate, stand }] }` for all active `external` shops with status `Nachbestellen` (optional `shop` filter).
+> - `pushPrices` `{ action:'pushPrices', secret, shop, results:[{ ref, status, price, currency, availability, productUrl }] }` → `handlePushPrices` validates the shop is `external`, checks each `ref` against `REF_PATTERN`, and upserts into `Preise`.
+>
+> The scraper (`scraper/`, standalone Node package) pulls the work list, scrapes each shop in `http` or `browser` (Playwright) mode per `scraper/shops.config.js`, and pushes results back. Credentials live in `scraper/.env` as `SHOP_CRED_<KEY>` (same key derivation as server-side). Runs locally / on a Pi via cron; `--debug` / `--dry-run` / per-REF debug dumps under `scraper/debug/`. See `scraper/README.md`.
 
 > Hinweis: Automated scraping may conflict with a shop's terms of service. Use your own B2B accounts at a low frequency (1×/day).
 

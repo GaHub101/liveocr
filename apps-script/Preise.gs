@@ -412,6 +412,47 @@ function upsertPriceRow(supplier, ref, result) {
 }
 
 // ---------------------------------------------------------------------------
+// Externer Scraper: Arbeitsliste ausliefern (Action "getWorkList")
+// ---------------------------------------------------------------------------
+
+// Liefert dem externen Scraper-Dienst die zu scrapenden REFs für alle aktiven
+// "external"-Shops (Status "Nachbestellen"). In doPost gegen SCRAPER_PUSH_SECRET
+// geprüft (nicht das client-sichtbare WEBHOOK_SECRET).
+// Optionaler payload.shop-Filter beschränkt auf einen Shop.
+// Antwort: { status:'ok', items:[{ shop, ref, searchTemplate, stand }] }
+function handleGetWorkList(payload) {
+  var shopFilter = String((payload && payload.shop) || '').trim().toLowerCase();
+
+  var configs = getShopConfigs();
+  var activeByName = {};
+  for (var ci = 0; ci < configs.length; ci++) {
+    var cfg = configs[ci];
+    if (!cfg.active || cfg.mode !== 'external') continue;
+    if (shopFilter && cfg.name.toLowerCase() !== shopFilter) continue;
+    activeByName[cfg.name.toLowerCase()] = cfg;
+  }
+
+  if (!Object.keys(activeByName).length) {
+    logUsage('getWorkList', 'ok', 'Keine aktiven external-Shops' + (shopFilter ? ' (Filter: ' + shopFilter + ')' : ''));
+    return jsonResponse({ status: 'ok', items: [] });
+  }
+
+  var work = buildWorkList_(activeByName);   // [{config, ref, stand}]
+  var items = [];
+  for (var i = 0; i < work.length; i++) {
+    items.push({
+      shop:           work[i].config.name,
+      ref:            work[i].ref,
+      searchTemplate: work[i].config.searchTemplate,
+      stand:          work[i].stand || ''
+    });
+  }
+
+  logUsage('getWorkList', 'ok', 'items=' + items.length);
+  return jsonResponse({ status: 'ok', items: items });
+}
+
+// ---------------------------------------------------------------------------
 // Trigger-Job
 // ---------------------------------------------------------------------------
 
