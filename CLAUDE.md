@@ -30,7 +30,7 @@ Single-page PWA (Vite + vite-plugin-pwa), no framework. `index.html` is the app 
 ```
 Camera (getUserMedia, rear-facing)
   → canvas.js  – crop to scan zone (80%×60%, centred), 20 px white padding, colour image
-  → ocr.js     – Gemini 2.5 Flash via Apps Script webhook; canvas frame → base64-JPEG → POST
+  → ocr.js     – Gemini 2.5 Flash-Lite via Apps Script webhook; canvas frame → base64-JPEG → POST
 
 ?id= mode (write + reorder):
   → main.js    – user clicks "REF-Nr. hinzufügen"
@@ -39,7 +39,7 @@ Camera (getUserMedia, rear-facing)
 
 Standalone mode (no ?id=):
   → main.js    – mode-selector ("Was möchten Sie tun?") with three options A / B / C
-  → A) Produkt hinzufügen   – scan → lookupProduct() → modal with supplier dropdown → addProduct()
+  → A) Produkt hinzufügen   – scan → lookupProduct() ∥ verifySuppliers() (parallel) → modal with supplier dropdown → addProduct()
   → B) Produkt suchen       – scan → checkRef() → on hit: status modal (values from Bestellstatus tab) → setStatus()
                                                   on miss: "Neues Produkt anlegen" button (falls back to A)
   → C) Nachbestellen        – scan → checkRef() → supplier links + "Nachbestellen" button → markReorder()
@@ -52,17 +52,17 @@ Standalone mode (no ?id=):
 |---|---|
 | `src/camera.js` | `getUserMedia`, rear camera (`facingMode: environment`) |
 | `src/canvas.js` | Crop to scan zone (80%×60%, centred) + 20 px white padding. Sends colour image directly to Gemini – no grayscale or binarisation. |
-| `src/ocr.js` | Gemini 2.5 Flash via Apps Script webhook. Canvas frame → downscaled 50 % → JPEG (q0.7) → base64 → POST. Prompt is hardcoded server-side. |
+| `src/ocr.js` | Gemini 2.5 Flash-Lite via Apps Script webhook. Canvas frame → downscaled 50 % → JPEG (q0.7) → base64 → POST. Prompt is hardcoded server-side. |
 | `src/send.js` | `fetch()` without `Content-Type` header (simple request, no CORS preflight). Offline queue in `localStorage` (`ocr_send_queue`), auto-flush on `online` event |
-| `src/prices.js` | `checkRef`, `lookupProduct`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setOrderStatus` – all POST to Apps Script |
+| `src/prices.js` | `checkRef`, `lookupProduct`, `verifySuppliers`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setOrderStatus` – all POST to Apps Script |
 | `src/logger.js` | Ring-buffer log, max. 300 entries, `localStorage`. Debug overlay via `?debug` URL param |
 | `src/ui.js` | DOM updates: status, result, banner, queue badge, supplier links, lookup modal, mode-selector, status modal, supplier dropdown |
 | `src/main.js` | Entry point. URL params: `?id=` (write+reorder), `?name=` (banner), `?debug`. Standalone shows mode-selector first; selected mode (`add`/`search`/`reorder`) branches the post-scan flow. |
-| `apps-script/Code.gs` | Google Apps Script webhook. Actions: `ocr`, `checkRef`/`search`, `lookupProduct`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setStatus`, `writeRef` (id present), `appendLog` (standalone) |
+| `apps-script/Code.gs` | Google Apps Script webhook. Actions: `ocr`, `checkRef`/`search`, `lookupProduct`, `verifySuppliers`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setStatus`, `writeRef` (id present), `appendLog` (standalone) |
 
 ### OCR configuration
 
-Gemini 2.5 Flash (via Apps Script webhook `handleGeminiOcr`):
+Gemini 2.5 Flash-Lite (via Apps Script webhook `handleGeminiOcr`):
 - Canvas frame → downscaled 50 % on offscreen canvas → JPEG (quality 0.7) → base64 → POST `{ action: 'ocr', image, secret }`
 - Prompt is hardcoded in `Code.gs` (`handleGeminiOcr`), not sent from the client
 - `GEMINI_API_KEY` must be set in Apps Script Script Properties

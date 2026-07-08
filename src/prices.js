@@ -44,6 +44,18 @@ export async function lookupProduct(ref, hersteller = '') {
   }
 }
 
+export async function verifySuppliers(ref, hersteller = '') {
+  try {
+    const data = await post({ action: 'verifySuppliers', ref, hersteller });
+    const alts = Array.isArray(data.alt_lieferanten) ? data.alt_lieferanten : [];
+    log.info('prices', `verifySuppliers: ref="${ref}" → ${alts.length} Lieferant${alts.length !== 1 ? 'en' : ''}`);
+    return alts;
+  } catch (err) {
+    log.warn('prices', `verifySuppliers fehlgeschlagen: ref="${ref}" – ${err.message}`);
+    return [];
+  }
+}
+
 export async function addProduct(payload) {
   log.info('prices', `addProduct: ref="${payload.ref}", name="${payload.name ?? '–'}"`);
   const data = await post({ action: 'addProduct', ...payload });

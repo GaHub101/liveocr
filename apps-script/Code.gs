@@ -30,6 +30,7 @@ var STATUS_COL               = 9;   // Spalte I, Bestellstatus (1-based)
 var ID_COL_INDEX             = 0;   // Spalte A (0-based)
 var HAUPTLIEFERANT_COL_IDX   = 4;   // Spalte E (0-based)
 var ALT_LIEFERANT_COL_IDXS   = [13, 14, 15, 16];  // Spalten N–Q (0-based)
+var MAX_VERIFY_SUPPLIERS     = 10;  // Obergrenze Lieferanten pro Verifikations-Request (Latenz)
 
 // [FIX] Konservativeres Limit: ~5 MB dekodiert → ~6.7 MB Base64
 var MAX_BASE64_LENGTH  = 6.7 * 1024 * 1024;
@@ -84,6 +85,10 @@ function doPost(e) {
 
     if (payload.action === 'lookupProduct') {
       return handleLookupProduct(payload);
+    }
+
+    if (payload.action === 'verifySuppliers') {
+      return handleVerifySuppliers(payload);
     }
 
     if (payload.action === 'addProduct') {
@@ -345,7 +350,7 @@ function handleGeminiOcr(base64Image, mimeType) {
     return jsonResponse({ status: 'error', message: 'GEMINI_API_KEY nicht konfiguriert' });
   }
 
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=' + apiKey;
   var prompt = 'Read this product label and return ONLY a JSON object with two keys:'
     + ' "ref" = the REF code (digits, letters, hyphens or slashes — e.g. "630-0032", "012345A"),'
     + ' typically next to or below "REF", often in a box. If unclear, best guess. If none visible: empty string "".'
@@ -392,7 +397,7 @@ function handleGeminiOcr(base64Image, mimeType) {
     return jsonResponse({ status: 'error', message: 'Keine Antwort von Gemini', raw: responseText.substring(0, 200) });
   }
 
-  // gemini-2.5-flash gibt Thinking-Parts zurück (thought:true) – herausfiltern
+  // Gemini kann Thinking-Parts zurückgeben (thought:true) – herausfiltern
   var parts = result.candidates[0].content.parts || [];
   var textParts = parts.filter(function(p) { return !p.thought && p.text; });
   var raw = textParts.length > 0 ? textParts[textParts.length - 1].text.trim() : '';
@@ -438,40 +443,19 @@ function handleLookupProduct(payload) {
   var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) return jsonResponse({ status: 'ok', suggestion: {} });
 
-  // Lieferantenliste lesen (für Verifikation im Prompt)
-  var supplierNames = [];
-  var lSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SUPPLIERS_SHEET);
-  if (lSheet) {
-    var lData = lSheet.getDataRange().getValues();
-    for (var i = 1; i < lData.length; i++) {
-      var n = String(lData[i][0]).trim();
-      if (n) supplierNames.push(n);
-    }
-  }
-
-  var supplierClause = supplierNames.length > 0
-    ? ' Prüfe zusätzlich anhand der Web-Suche, welche der folgenden Lieferanten das identifizierte Produkt '
-      + 'nachweislich im Sortiment führen (Distributor-Listen, Online-Shop-Treffer): '
-      + supplierNames.join(', ') + '. '
-      + 'Liste in "alt_lieferanten" max. 4 Namen (exakte Schreibweise). '
-      + 'Nur tatsächlich verifizierte Lieferanten — KEINE Schätzung anhand Sortiments-Schwerpunkt. '
-      + 'Wenn keine Verifikation möglich: leeres Array [].'
-    : '';
-
   var prompt = 'Du bist Experte für medizinische/zahnmedizinische Produkte. '
     + 'Suche im Web nach diesem Produkt: "' + suchbegriff + ' ' + ref + '". '
     + 'Bestimme aus den Suchergebnissen: '
     + 'hersteller (gängiger Markenname OHNE Rechtsform-Suffixe wie Inc., AG, GmbH, Corporation, Corp., Ltd., Co., SA, NV — z.B. "Ormco" statt "Ormco Inc.", "3M" statt "3M Company"), '
     + 'artikelname (offizielle Produktbezeichnung für diese REF).'
-    + supplierClause
-    + ' Antworte NUR als JSON: {"hersteller":"","artikelname":"","alt_lieferanten":[]}. '
-    + 'Unbekannte Felder = leerer String bzw. leeres Array. Keine Spekulation.';
+    + ' Antworte NUR als JSON: {"hersteller":"","artikelname":""}. '
+    + 'Unbekannte Felder = leerer String. Keine Spekulation.';
 
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=' + apiKey;
   var body = {
     contents: [{ parts: [{ text: prompt }] }],
     tools: [{ google_search: {} }],
-    generationConfig: { maxOutputTokens: 350, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
+    generationConfig: { maxOutputTokens: 250, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
   };
 
   try {
@@ -487,17 +471,82 @@ function handleLookupProduct(payload) {
     var raw       = textParts.length > 0 ? textParts[textParts.length - 1].text.trim() : '{}';
     var jsonMatch = raw.match(/\{[\s\S]*\}/);
     var suggestion = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
-    if (!Array.isArray(suggestion.alt_lieferanten)) suggestion.alt_lieferanten = [];
 
     logUsage('lookupProduct', 'ok',
-      'ref=' + ref + ' suchbegriff=' + suchbegriff
-      + ' grounded=' + grounded
-      + ' alts=' + suggestion.alt_lieferanten.length);
+      'ref=' + ref + ' suchbegriff=' + suchbegriff + ' grounded=' + grounded);
     return jsonResponse({ status: 'ok', suggestion: suggestion });
   } catch (err) {
     Logger.log('handleLookupProduct ERROR: ' + err.message);
     logUsage('lookupProduct', 'error', err.message);
     return jsonResponse({ status: 'ok', suggestion: {} });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lieferanten-Verifikation (läuft clientseitig parallel zu lookupProduct)
+// ---------------------------------------------------------------------------
+
+function handleVerifySuppliers(payload) {
+  var ref         = String(payload.ref        || '').trim();
+  var suchbegriff = String(payload.hersteller || '').trim();
+  if (!ref) return jsonResponse({ status: 'error', message: 'ref fehlt' });
+
+  var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) return jsonResponse({ status: 'ok', alt_lieferanten: [] });
+
+  // Lieferantenliste lesen, begrenzt auf MAX_VERIFY_SUPPLIERS Einträge
+  var supplierNames = [];
+  var lSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SUPPLIERS_SHEET);
+  if (lSheet) {
+    var lData = lSheet.getDataRange().getValues();
+    for (var i = 1; i < lData.length && supplierNames.length < MAX_VERIFY_SUPPLIERS; i++) {
+      var n = String(lData[i][0]).trim();
+      if (n) supplierNames.push(n);
+    }
+  }
+  if (supplierNames.length === 0) return jsonResponse({ status: 'ok', alt_lieferanten: [] });
+
+  var prompt = 'Du bist Experte für medizinische/zahnmedizinische Produkte. '
+    + 'Produkt: "' + suchbegriff + ' ' + ref + '". '
+    + 'Prüfe anhand der Web-Suche, welche der folgenden Lieferanten dieses Produkt '
+    + 'nachweislich im Sortiment führen (Distributor-Listen, Online-Shop-Treffer): '
+    + supplierNames.join(', ') + '. '
+    + 'Liste in "alt_lieferanten" max. 4 Namen (exakte Schreibweise). '
+    + 'Nur tatsächlich verifizierte Lieferanten — KEINE Schätzung anhand Sortiments-Schwerpunkt. '
+    + 'Wenn keine Verifikation möglich: leeres Array []. '
+    + 'Antworte NUR als JSON: {"alt_lieferanten":[]}.';
+
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
+  var body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    tools: [{ google_search: {} }],
+    generationConfig: { maxOutputTokens: 200, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
+  };
+
+  try {
+    var resp     = UrlFetchApp.fetch(url, {
+      method: 'POST', contentType: 'application/json',
+      payload: JSON.stringify(body), muteHttpExceptions: true
+    });
+    var result    = JSON.parse(resp.getContentText());
+    var rParts    = (result.candidates && result.candidates[0] &&
+                     result.candidates[0].content && result.candidates[0].content.parts) || [];
+    var textParts = rParts.filter(function(p) { return !p.thought && p.text; });
+    var raw       = textParts.length > 0 ? textParts[textParts.length - 1].text.trim() : '{}';
+    var jsonMatch = raw.match(/\{[\s\S]*\}/);
+    var parsed    = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    var alts      = Array.isArray(parsed.alt_lieferanten) ? parsed.alt_lieferanten : [];
+    // Nur Namen zulassen, die exakt in der Lieferantenliste stehen
+    alts = alts.map(function(n) { return String(n).trim(); })
+               .filter(function(n) { return supplierNames.indexOf(n) !== -1; })
+               .slice(0, 4);
+
+    logUsage('verifySuppliers', 'ok', 'ref=' + ref + ' alts=' + alts.length);
+    return jsonResponse({ status: 'ok', alt_lieferanten: alts });
+  } catch (err) {
+    Logger.log('handleVerifySuppliers ERROR: ' + err.message);
+    logUsage('verifySuppliers', 'error', err.message);
+    return jsonResponse({ status: 'ok', alt_lieferanten: [] });
   }
 }
 
