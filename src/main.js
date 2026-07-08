@@ -261,7 +261,7 @@ async function main() {
     });
     lookupCancel.addEventListener('click', () => { setLookupModal('hidden'); resetToEditField(); });
 
-    // "Vorschlag laden": Hersteller + REF an Gemini, befüllt Artikelname/Kategorie/Alt-Lieferanten
+    // "Vorschlag laden": Hersteller + REF an Gemini, befüllt Artikelname/Alt-Lieferanten
     const suggestBtn      = document.getElementById('lk-suggest-btn');
     const herstellerInput = document.getElementById('lk-hersteller');
     async function loadSuggestion() {
@@ -275,7 +275,7 @@ async function main() {
       const refForLookup = document.getElementById('lk-ref')?.value.trim() || lastText;
       const suggestion = await lookupProduct(refForLookup, hersteller);
       applyLookupSuggestion(suggestion);
-      const filled = [suggestion.hersteller, suggestion.artikelname, suggestion.kategorie].filter(Boolean).length;
+      const filled = [suggestion.hersteller, suggestion.artikelname].filter(Boolean).length;
       const altsN  = Array.isArray(suggestion.alt_lieferanten) ? suggestion.alt_lieferanten.length : 0;
       setSuggestStatus(
         filled > 0 || altsN > 0
