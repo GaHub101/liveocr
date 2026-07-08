@@ -18,8 +18,8 @@ import {
   showReviewControls, showCameraSwitch, showZoomControl, getZoomValue,
 } from './ui.js';
 import {
-  checkRef, lookupProduct, verifySuppliers, addProduct, getProductSuppliers, markReorder,
-  listSuppliers, listLocations, listStatusValues, setOrderStatus,
+  checkRef, lookupProduct, addProduct, getProductSuppliers, markReorder,
+  bootstrap, listSuppliers, listLocations, listStatusValues, setOrderStatus,
 } from './prices.js';
 
 const video   = document.getElementById('video');
@@ -52,15 +52,19 @@ let lastConfidence      = 0;
 let cachedSuppliers     = [];
 let lastFoundProductId  = null;  // ID der zuletzt im Sheet gefundenen REF
 let cachedStatusValues  = [];
-let lastAltLieferanten  = [];    // verifizierte Alt-Lieferanten aus verifySuppliers → alt1–alt4 bei addProduct
 let suggestRequestId    = 0;     // entwertet veraltete Vorschlag-Antworten nach erneutem Klick/Modal-Wechsel
 
 const modeBtnLabels = { add: 'Weiter', search: 'Suchen', reorder: 'Bestellen' };
 
 async function handleAddMode(text) {
-  document.getElementById('search-ref-input').value = text;
-  showSearchSuggestionInput(true);
-  setStatus('REF prüfen, Hersteller eintippen und "Weiter" klicken', 'ready');
+  // Direkt ins Formular springen – REF ist dort editierbar, Cursor steht im Hersteller-Feld
+  const sugg = getSearchSuggestionValue();
+  showSearchRefInput(false);
+  showSearchSuggestionInput(false);
+  suggestRequestId++;
+  setLookupModal('form', text, null);
+  if (sugg) document.getElementById('lk-hersteller').value = sugg;
+  setStatus('Hersteller eintippen und "Vorschlag laden"', 'ready');
 }
 
 async function handleSearchMode(text) {
@@ -101,10 +105,30 @@ async function main() {
     });
   }
 
-  // Lieferanten + Bestellstatus-Werte parallel laden (für Dropdowns)
-  listSuppliers().then(names => populateSupplierDropdown(names));
-  listLocations().then(locs => populateLocationDropdown(locs));
-  listStatusValues().then(values => { cachedStatusValues = values; populateStatusDropdown(values); });
+  // Dropdown-Daten: sofort aus dem localStorage-Cache, dann ein einziger
+  // bootstrap-Request im Hintergrund (statt drei einzelner Roundtrips)
+  const BOOTSTRAP_CACHE_KEY = 'ocr_bootstrap_cache';
+  function applyBootstrapData(data) {
+    populateSupplierDropdown(data.suppliers || []);
+    populateLocationDropdown(data.locations || []);
+    cachedStatusValues = data.statusValues || [];
+    populateStatusDropdown(cachedStatusValues);
+  }
+  try {
+    const cached = JSON.parse(localStorage.getItem(BOOTSTRAP_CACHE_KEY) || 'null');
+    if (cached) applyBootstrapData(cached);
+  } catch { /* defekter Cache – ignorieren */ }
+  bootstrap().then((data) => {
+    if (data) {
+      applyBootstrapData(data);
+      localStorage.setItem(BOOTSTRAP_CACHE_KEY, JSON.stringify(data));
+    } else {
+      // Fallback: Apps Script ohne bootstrap-Action deployed
+      listSuppliers().then(names => populateSupplierDropdown(names));
+      listLocations().then(locs => populateLocationDropdown(locs));
+      listStatusValues().then(values => { cachedStatusValues = values; populateStatusDropdown(values); });
+    }
+  });
 
   // Kamera starten
   setLoadingMessage('Kamera wird gestartet…', 10);
@@ -199,7 +223,6 @@ async function main() {
         showSearchRefInput(false);
         showSearchSuggestionInput(false);
         suggestRequestId++;
-        lastAltLieferanten = [];
         setLookupModal('form', ref, null);
         if (sugg) document.getElementById('lk-hersteller').value = sugg;
         return;
@@ -260,14 +283,12 @@ async function main() {
       showSearchSuggestionInput(false);
       showLookupButton(false);
       suggestRequestId++;
-      lastAltLieferanten = [];
       setLookupModal('form', ref, null);
       if (sugg) document.getElementById('lk-hersteller').value = sugg;
     });
     lookupCancel.addEventListener('click', () => { setLookupModal('hidden'); resetToEditField(); });
 
-    // "Vorschlag laden": zwei parallele Gemini-Requests – Produktdaten (schnell)
-    // füllen das Formular sofort, die Lieferanten-Verifikation (langsam) trägt nach
+    // "Vorschlag laden": Hersteller + REF an Gemini, befüllt Hersteller/Artikelname
     const suggestBtn      = document.getElementById('lk-suggest-btn');
     const herstellerInput = document.getElementById('lk-hersteller');
     async function loadSuggestion() {
@@ -278,25 +299,15 @@ async function main() {
         return;
       }
       const reqId = ++suggestRequestId;
-      lastAltLieferanten = [];
       setSuggestStatus('Lade Vorschlag…', 'loading');
       const refForLookup = document.getElementById('lk-ref')?.value.trim() || lastText;
-      const altsPromise = verifySuppliers(refForLookup, hersteller);
-      const suggestion  = await lookupProduct(refForLookup, hersteller);
+      const suggestion = await lookupProduct(refForLookup, hersteller);
       if (reqId !== suggestRequestId) return;
       applyLookupSuggestion(suggestion);
       const filled = [suggestion.hersteller, suggestion.artikelname].filter(Boolean).length;
       setSuggestStatus(
         filled > 0
-          ? `Vorschlag geladen (${filled} Felder) – Lieferanten werden geprüft…`
-          : 'Kein Vorschlag — bitte manuell ausfüllen (Lieferanten werden geprüft…)',
-      );
-      const alts = await altsPromise;
-      if (reqId !== suggestRequestId) return;
-      lastAltLieferanten = alts;
-      setSuggestStatus(
-        filled > 0 || alts.length > 0
-          ? `Vorschlag geladen (${filled} Felder, ${alts.length} Lieferanten)`
+          ? `Vorschlag geladen (${filled} Felder)`
           : 'Kein Vorschlag — bitte manuell ausfüllen',
       );
     }
@@ -312,8 +323,6 @@ async function main() {
         const re = new RegExp(vals.hersteller.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
         vals.name = vals.name.replace(re, '').replace(/\s+/g, ' ').trim();
       }
-      // Verifizierte Alt-Lieferanten mitschicken (Spalten N–Q)
-      lastAltLieferanten.slice(0, 4).forEach((name, i) => { vals[`alt${i + 1}`] = name; });
       lookupConfirm.disabled = true;
       lookupConfirm.textContent = 'Speichern…';
       try {
@@ -417,8 +426,9 @@ async function main() {
       lastConfidence = confidence;
       showResult(text, confidence);
       setStatus('Erkannt', 'ready');
-      // Add-Modus: Hersteller-Feld einblenden – auch wenn keine REF erkannt wurde
-      if (!productId && userMode === 'add') {
+      // Add-Modus ohne erkannte REF: manuelle Eingabefelder zeigen
+      // (mit REF öffnet handleAddMode direkt das Formular)
+      if (!productId && userMode === 'add' && !text) {
         showSearchSuggestionInput(true);
       }
       if (text) {

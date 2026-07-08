@@ -7,7 +7,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // während der Autofokus noch „pumpt" – ohne Fokus-applyConstraints
 // (CLAUDE.md / Commit 7b2dfc9). Liefert ein ImageBitmap oder null
 // (dann soll der Aufrufer den Video-Frame direkt nehmen).
-export async function captureSharpest({ video, imageCapture }, n = 6, spanMs = 700) {
+// 4 Frames über 400 ms reichen; mehr verzögert nur den OCR-Start.
+export async function captureSharpest({ video, imageCapture }, n = 4, spanMs = 400) {
   const step = Math.max(60, Math.round(spanMs / n));
   let best = null;
   let bestScore = -1;
