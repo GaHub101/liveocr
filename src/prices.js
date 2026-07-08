@@ -49,11 +49,13 @@ export async function bootstrap() {
   try {
     const data = await post({ action: 'bootstrap' });
     if (data.status !== 'ok') return null;
-    log.info('prices', `bootstrap: ${data.suppliers?.length ?? 0} Lieferanten, ${data.locations?.length ?? 0} Lagerorte, ${data.statusValues?.length ?? 0} Statuswerte`);
+    log.info('prices', `bootstrap: ${data.suppliers?.length ?? 0} Lieferanten, ${data.locations?.length ?? 0} Lagerorte, ${data.statusValues?.length ?? 0} Statuswerte, ${data.hersteller?.length ?? 0} Hersteller, ${data.refMap?.length ?? 0} REF-Paare`);
     return {
       suppliers:    data.suppliers    || [],
       locations:    data.locations    || [],
       statusValues: data.statusValues || [],
+      hersteller:   data.hersteller   || [],
+      refMap:       data.refMap       || [],
     };
   } catch (err) {
     log.warn('prices', `bootstrap fehlgeschlagen: ${err.message}`);

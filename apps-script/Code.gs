@@ -500,13 +500,37 @@ function handleBootstrap() {
   var locations    = columnA(LAGERORT_SHEET);
   var statusValues = columnA(STATUS_SHEET);
 
+  // Hersteller (Spalte C, unique) + REF→Hersteller-Paare (F→C) aus "Bestellungen"
+  // für Dropdown-Vorschläge und die Hersteller-Vorauswahl anhand ähnlicher REFs
+  var herstellerSeen = {};
+  var hersteller = [];
+  var refMap = [];
+  var bSheet = ss.getSheetByName(BESTELLUNGEN_SHEET);
+  if (bSheet) {
+    var lastRow = bSheet.getLastRow();
+    if (lastRow > 1) {
+      var rows = bSheet.getRange(2, 3, lastRow - 1, 4).getValues();  // Spalten C–F
+      for (var j = 0; j < rows.length; j++) {
+        var h = String(rows[j][0] || '').trim();  // C: Hersteller
+        var r = String(rows[j][3] || '').trim();  // F: REF-Nummer
+        if (h && !herstellerSeen[h]) { herstellerSeen[h] = true; hersteller.push(h); }
+        if (h && r) refMap.push([r, h]);
+      }
+      hersteller.sort(function(a, b) { return a.localeCompare(b); });
+    }
+  }
+
   logUsage('bootstrap', 'ok',
-    'suppliers=' + suppliers.length + ' locations=' + locations.length + ' status=' + statusValues.length);
+    'suppliers=' + suppliers.length + ' locations=' + locations.length
+    + ' status=' + statusValues.length + ' hersteller=' + hersteller.length
+    + ' refMap=' + refMap.length);
   return jsonResponse({
     status: 'ok',
     suppliers: suppliers,
     locations: locations,
-    statusValues: statusValues
+    statusValues: statusValues,
+    hersteller: hersteller,
+    refMap: refMap
   });
 }
 

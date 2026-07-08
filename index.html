@@ -783,7 +783,8 @@
       <label class="ref-label">REF-Nr. *<input id="lk-ref" type="text"></label>
       <div id="lookup-loading">Suche läuft…</div>
       <div id="lookup-form" style="display:none">
-        <label>Suchbegriff *<input id="lk-hersteller" type="text" placeholder="z.B. Hersteller, Produktbeschreibung"></label>
+        <label>Suchbegriff *<input id="lk-hersteller" type="text" list="hersteller-list" placeholder="Hersteller wählen oder eintippen"></label>
+        <datalist id="hersteller-list"></datalist>
         <button id="lk-suggest-btn" type="button">Vorschlag laden</button>
         <div id="lk-suggest-status"></div>
         <label>Hersteller<input id="lk-manu" type="text"></label>
