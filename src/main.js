@@ -49,7 +49,6 @@ let userMode = productId ? 'reorder' : null;
 
 let lastText            = '';
 let lastConfidence      = 0;
-let lastSuggestion      = '';   // OCR-Suchvorschlag aus dem Etikett (Wishlist Pkt. 4)
 let cachedSuppliers     = [];
 let lastFoundProductId  = null;  // ID der zuletzt im Sheet gefundenen REF
 let cachedStatusValues  = [];
@@ -60,8 +59,8 @@ const modeBtnLabels = { add: 'Weiter', search: 'Suchen', reorder: 'Bestellen' };
 
 async function handleAddMode(text) {
   document.getElementById('search-ref-input').value = text;
-  showSearchSuggestionInput(true, lastSuggestion);
-  setStatus('REF prüfen und "Weiter" klicken', 'ready');
+  showSearchSuggestionInput(true);
+  setStatus('REF prüfen, Hersteller eintippen und "Weiter" klicken', 'ready');
 }
 
 async function handleSearchMode(text) {
@@ -232,8 +231,8 @@ async function main() {
           showSupplierLinks([], ref);
           showReorderButton(false);
           showLookupButton(true);
-          // REF nicht in DB → Suchvorschlag-Feld einblenden für ggf. "Neues Produkt anlegen" (Wishlist Pkt. 4)
-          showSearchSuggestionInput(true, lastSuggestion);
+          // REF nicht in DB → Hersteller-Feld einblenden für ggf. "Neues Produkt anlegen" (Wishlist Pkt. 4)
+          showSearchSuggestionInput(true);
           setStatus('REF nicht gefunden – als neues Produkt anlegen?', 'ready');
         }
         return;
@@ -248,7 +247,7 @@ async function main() {
       } else {
         lastFoundProductId = null;
         showLookupButton(true);
-        showSearchSuggestionInput(true, lastSuggestion);
+        showSearchSuggestionInput(true);
         setStatus('REF nicht gefunden – als neues Produkt anlegen?', 'ready');
       }
     });
@@ -256,7 +255,7 @@ async function main() {
     lookupBtn.addEventListener('click', () => {
       const ref = (searchRefInput && searchRefInput.value.trim()) || lastText;
       if (!ref) return;
-      const sugg = getSearchSuggestionValue() || lastSuggestion;
+      const sugg = getSearchSuggestionValue();
       showSearchRefInput(false);
       showSearchSuggestionInput(false);
       showLookupButton(false);
@@ -412,16 +411,15 @@ async function main() {
     lastFoundProductId = null;
     setLookupModal('hidden');
     showStatusModal(false);
-    await scheduleRecognition(canvas, (text, confidence, suggestion = '') => {
-      log.info('main', `OCR-Ergebnis: "${text || '–'}", Konfidenz=${confidence}%, Vorschlag="${suggestion || '–'}"`);
+    await scheduleRecognition(canvas, (text, confidence) => {
+      log.info('main', `OCR-Ergebnis: "${text || '–'}", Konfidenz=${confidence}%`);
       lastText       = text;
       lastConfidence = confidence;
-      lastSuggestion = suggestion || '';
       showResult(text, confidence);
       setStatus('Erkannt', 'ready');
-      // Add-Modus: Suchvorschlag immer aktualisieren – auch wenn keine REF erkannt wurde
+      // Add-Modus: Hersteller-Feld einblenden – auch wenn keine REF erkannt wurde
       if (!productId && userMode === 'add') {
-        showSearchSuggestionInput(true, lastSuggestion);
+        showSearchSuggestionInput(true);
       }
       if (text) {
         if (productId) {
@@ -514,7 +512,7 @@ function selectMode(mode) {
 }
 
 // Mode-Wechsel aus der Scan-Ansicht heraus (Wishlist Pkt. 4)
-// REF + Suggestion bleiben erhalten, transiente UI-States werden zurückgesetzt.
+// REF + eingetippter Hersteller bleiben erhalten, transiente UI-States werden zurückgesetzt.
 function switchMode(mode) {
   userMode = mode;
   log.info('main', `Mode gewechselt: ${mode}`);
@@ -531,8 +529,8 @@ function switchMode(mode) {
   const inp = document.getElementById('search-ref-input');
   const currentRef = inp ? inp.value : '';
   showSearchRefInput(true, currentRef, modeBtnLabels[mode] || 'Weiter');
-  // Suchvorschlag-Feld nach Mode-Regel: Add zeigt es immer; sonst verbergen
-  if (mode === 'add') showSearchSuggestionInput(true, lastSuggestion);
+  // Hersteller-Feld nach Mode-Regel: Add zeigt es immer (eingetippter Wert bleibt); sonst verbergen
+  if (mode === 'add') showSearchSuggestionInput(true);
   else                showSearchSuggestionInput(false);
   setStatus(`Modus: ${modeLabel(mode)}`, 'ready');
 }
