@@ -15,7 +15,7 @@ import {
   showStatusModal, getStatusModalValue, setStatusModalState,
   showModeSwitcher, setActiveModeSwitch,
   showSearchSuggestionInput, getSearchSuggestionValue,
-  populateHerstellerDatalist,
+  populateHerstellerDatalist, populateKategorieDatalist,
   showReviewControls, showCameraSwitch, showZoomControl, getZoomValue,
 } from './ui.js';
 import {
@@ -145,6 +145,7 @@ async function main() {
     cachedStatusValues = data.statusValues || [];
     populateStatusDropdown(cachedStatusValues);
     populateHerstellerDatalist(data.hersteller || []);
+    populateKategorieDatalist(data.kategorien || []);
     cachedRefMap = data.refMap || [];
   }
   try {

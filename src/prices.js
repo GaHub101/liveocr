@@ -55,6 +55,7 @@ export async function bootstrap() {
       locations:    data.locations    || [],
       statusValues: data.statusValues || [],
       hersteller:   data.hersteller   || [],
+      kategorien:   data.kategorien   || [],
       refMap:       data.refMap       || [],
     };
   } catch (err) {
