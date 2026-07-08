@@ -186,6 +186,7 @@ export function setLookupModal(state, ref, suggestion) {
   if (state === 'form') {
     ['lk-name','lk-hersteller','lk-manu','lk-cat','lk-sup','lk-loc','lk-status']
       .forEach(id => { document.getElementById(id).value = ''; });
+    selectDefaultStatus();
     const status = document.getElementById('lk-suggest-status');
     if (status) status.textContent = '';
     const sBtn = document.getElementById('lk-suggest-btn');
@@ -254,8 +255,27 @@ export function showModeSelector(visible) {
 export function populateStatusDropdown(values) {
   const sel = document.getElementById('lk-status');
   if (!sel) return;
+  const current = sel.value;
   sel.innerHTML = '<option value="">– bitte wählen –</option>'
     + values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  if (current && values.includes(current)) sel.value = current;
+  else selectDefaultStatus();
+}
+
+// Vorauswahl "vorhanden" (Schreibweise aus dem Bestellstatus-Tab, case-insensitiv)
+export function selectDefaultStatus() {
+  const sel = document.getElementById('lk-status');
+  if (!sel) return;
+  for (const opt of sel.options) {
+    if (opt.value.toLowerCase() === 'vorhanden') { sel.value = opt.value; return; }
+  }
+}
+
+// Hersteller-Vorschläge (Spalte C aus "Bestellungen") fürs Eingabefeld – Freitext bleibt möglich
+export function populateHerstellerDatalist(names) {
+  const dl = document.getElementById('hersteller-list');
+  if (!dl) return;
+  dl.innerHTML = names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
 }
 
 export function showSearchRefInput(show, prefillText = '', btnLabel = 'Suchen') {
