@@ -18,7 +18,7 @@ import {
   showReviewControls, showCameraSwitch, showZoomControl, getZoomValue,
 } from './ui.js';
 import {
-  checkRef, lookupProduct, addProduct, getProductSuppliers, markReorder,
+  checkRef, lookupProduct, verifySuppliers, addProduct, getProductSuppliers, markReorder,
   listSuppliers, listLocations, listStatusValues, setOrderStatus,
 } from './prices.js';
 
@@ -53,6 +53,8 @@ let lastSuggestion      = '';   // OCR-Suchvorschlag aus dem Etikett (Wishlist P
 let cachedSuppliers     = [];
 let lastFoundProductId  = null;  // ID der zuletzt im Sheet gefundenen REF
 let cachedStatusValues  = [];
+let lastAltLieferanten  = [];    // verifizierte Alt-Lieferanten aus verifySuppliers → alt1–alt4 bei addProduct
+let suggestRequestId    = 0;     // entwertet veraltete Vorschlag-Antworten nach erneutem Klick/Modal-Wechsel
 
 const modeBtnLabels = { add: 'Weiter', search: 'Suchen', reorder: 'Bestellen' };
 
@@ -197,6 +199,8 @@ async function main() {
         const sugg = getSearchSuggestionValue();
         showSearchRefInput(false);
         showSearchSuggestionInput(false);
+        suggestRequestId++;
+        lastAltLieferanten = [];
         setLookupModal('form', ref, null);
         if (sugg) document.getElementById('lk-hersteller').value = sugg;
         return;
@@ -256,12 +260,15 @@ async function main() {
       showSearchRefInput(false);
       showSearchSuggestionInput(false);
       showLookupButton(false);
+      suggestRequestId++;
+      lastAltLieferanten = [];
       setLookupModal('form', ref, null);
       if (sugg) document.getElementById('lk-hersteller').value = sugg;
     });
     lookupCancel.addEventListener('click', () => { setLookupModal('hidden'); resetToEditField(); });
 
-    // "Vorschlag laden": Hersteller + REF an Gemini, befüllt Artikelname/Alt-Lieferanten
+    // "Vorschlag laden": zwei parallele Gemini-Requests – Produktdaten (schnell)
+    // füllen das Formular sofort, die Lieferanten-Verifikation (langsam) trägt nach
     const suggestBtn      = document.getElementById('lk-suggest-btn');
     const herstellerInput = document.getElementById('lk-hersteller');
     async function loadSuggestion() {
@@ -271,15 +278,26 @@ async function main() {
         herstellerInput.focus();
         return;
       }
+      const reqId = ++suggestRequestId;
+      lastAltLieferanten = [];
       setSuggestStatus('Lade Vorschlag…', 'loading');
       const refForLookup = document.getElementById('lk-ref')?.value.trim() || lastText;
-      const suggestion = await lookupProduct(refForLookup, hersteller);
+      const altsPromise = verifySuppliers(refForLookup, hersteller);
+      const suggestion  = await lookupProduct(refForLookup, hersteller);
+      if (reqId !== suggestRequestId) return;
       applyLookupSuggestion(suggestion);
       const filled = [suggestion.hersteller, suggestion.artikelname].filter(Boolean).length;
-      const altsN  = Array.isArray(suggestion.alt_lieferanten) ? suggestion.alt_lieferanten.length : 0;
       setSuggestStatus(
-        filled > 0 || altsN > 0
-          ? `Vorschlag geladen (${filled} Felder, ${altsN} Lieferanten)`
+        filled > 0
+          ? `Vorschlag geladen (${filled} Felder) – Lieferanten werden geprüft…`
+          : 'Kein Vorschlag — bitte manuell ausfüllen (Lieferanten werden geprüft…)',
+      );
+      const alts = await altsPromise;
+      if (reqId !== suggestRequestId) return;
+      lastAltLieferanten = alts;
+      setSuggestStatus(
+        filled > 0 || alts.length > 0
+          ? `Vorschlag geladen (${filled} Felder, ${alts.length} Lieferanten)`
           : 'Kein Vorschlag — bitte manuell ausfüllen',
       );
     }
@@ -295,6 +313,8 @@ async function main() {
         const re = new RegExp(vals.hersteller.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
         vals.name = vals.name.replace(re, '').replace(/\s+/g, ' ').trim();
       }
+      // Verifizierte Alt-Lieferanten mitschicken (Spalten N–Q)
+      lastAltLieferanten.slice(0, 4).forEach((name, i) => { vals[`alt${i + 1}`] = name; });
       lookupConfirm.disabled = true;
       lookupConfirm.textContent = 'Speichern…';
       try {
