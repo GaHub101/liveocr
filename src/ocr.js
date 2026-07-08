@@ -61,15 +61,14 @@ export async function scheduleRecognition(canvas, onResult) {
 
     const result = await resp.json();
 
-    const suggestion = result.suggestion || '';
     if (result.status === 'ok' && result.ref) {
-      log.info('ocr', `Erkannt via Gemini: ${result.ref} (Vorschlag: "${suggestion || '–'}")`);
-      onResult(result.ref, 100, suggestion);
+      log.info('ocr', `Erkannt via Gemini: ${result.ref}`);
+      onResult(result.ref, 100);
     } else if (result.status === 'error') {
       log.error('ocr', `Gemini API Fehler: ${result.message}`, result.raw ?? '');
     } else {
-      log.warn('ocr', `Kein REF gefunden – Gemini: "${result.raw ?? ''}" (Vorschlag: "${suggestion || '–'}")`);
-      onResult('', 0, suggestion);
+      log.warn('ocr', `Kein REF gefunden – Gemini: "${result.raw ?? ''}"`);
+      onResult('', 0);
     }
   } catch (err) {
     log.error('ocr', `Gemini-Aufruf fehlgeschlagen [${err.name}]`, err.message);

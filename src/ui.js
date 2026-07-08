@@ -280,7 +280,8 @@ export function setActiveModeSwitch(mode) {
 }
 
 // Suchvorschlag-Feld (Wishlist Pkt. 4) – Add: immer; Search/Reorder: nur bei REF-Miss
-export function showSearchSuggestionInput(show, prefillText = '') {
+// prefillText = null lässt einen manuell eingetippten Wert unangetastet
+export function showSearchSuggestionInput(show, prefillText = null) {
   const inp = document.getElementById('search-suggestion-input');
   if (!inp) return;
   inp.style.display = show ? 'block' : 'none';

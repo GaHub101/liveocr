@@ -351,11 +351,9 @@ function handleGeminiOcr(base64Image, mimeType) {
   }
 
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=' + apiKey;
-  var prompt = 'Read this product label and return ONLY a JSON object with two keys:'
+  var prompt = 'Read this product label and return ONLY a JSON object with one key:'
     + ' "ref" = the REF code (digits, letters, hyphens or slashes — e.g. "630-0032", "012345A"),'
     + ' typically next to or below "REF", often in a box. If unclear, best guess. If none visible: empty string "".'
-    + ' "suggestion" = a short search hint (1–4 words) read from the label — manufacturer/brand name'
-    + ' and/or product type (e.g. "Ormco brackets", "3M Filtek"). If nothing readable: empty string "".'
     + ' Return ONLY the JSON object, no markdown code fences, no commentary.';
 
   var body = {
@@ -363,7 +361,7 @@ function handleGeminiOcr(base64Image, mimeType) {
       { text: prompt },
       { inline_data: { mime_type: resolvedMime, data: base64Image } }
     ]}],
-    generationConfig: { maxOutputTokens: 150, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
+    generationConfig: { maxOutputTokens: 100, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
   };
 
   var resp = UrlFetchApp.fetch(url, {
@@ -404,13 +402,11 @@ function handleGeminiOcr(base64Image, mimeType) {
 
   // JSON aus raw extrahieren (robust gegen Markdown-Fences)
   var ref = '';
-  var suggestion = '';
   var jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
       var parsed = JSON.parse(jsonMatch[0]);
       ref = String(parsed.ref || '').trim();
-      suggestion = String(parsed.suggestion || '').trim();
     } catch (parseErr) {
       Logger.log('handleGeminiOcr: JSON-Parse fehlgeschlagen, raw="' + raw + '"');
     }
@@ -420,13 +416,11 @@ function handleGeminiOcr(base64Image, mimeType) {
     ref = raw;
   }
 
-  Logger.log('handleGeminiOcr: raw="' + raw + '" ref=' + (ref || '(leer)') + ' suggestion=' + (suggestion || '(leer)'));
-  logUsage('ocr', ref ? 'ok' : 'not_found',
-    'ref=' + (ref || '-') + ' suggestion=' + (suggestion || '-'));
+  Logger.log('handleGeminiOcr: raw="' + raw + '" ref=' + (ref || '(leer)'));
+  logUsage('ocr', ref ? 'ok' : 'not_found', 'ref=' + (ref || '-'));
   return jsonResponse({
     status: ref ? 'ok' : 'not_found',
     ref: ref,
-    suggestion: suggestion,
     raw: raw.substring(0, 200)
   });
 }
@@ -444,10 +438,12 @@ function handleLookupProduct(payload) {
   if (!apiKey) return jsonResponse({ status: 'ok', suggestion: {} });
 
   var prompt = 'Du bist Experte für medizinische/zahnmedizinische Produkte. '
-    + 'Suche im Web nach diesem Produkt: "' + suchbegriff + ' ' + ref + '". '
-    + 'Bestimme aus den Suchergebnissen: '
+    + 'Gegeben: Hersteller "' + suchbegriff + '" und REF-Nummer "' + ref + '". '
+    + 'Hersteller und REF-Nummer identifizieren das Produkt eindeutig. '
+    + 'Suche im Web nach "' + suchbegriff + ' ' + ref + '" (auch Herstellerkatalog und Händler-Shops) und bestimme: '
     + 'hersteller (gängiger Markenname OHNE Rechtsform-Suffixe wie Inc., AG, GmbH, Corporation, Corp., Ltd., Co., SA, NV — z.B. "Ormco" statt "Ormco Inc.", "3M" statt "3M Company"), '
-    + 'artikelname (offizielle Produktbezeichnung für diese REF).'
+    + 'artikelname (die exakte offizielle Produktbezeichnung für genau diese REF, inklusive aller Spezifikationen '
+    + 'wie Größe, Variante, Slot, Durchmesser, Farbe, Packungsinhalt — so präzise wie im Herstellerkatalog).'
     + ' Antworte NUR als JSON: {"hersteller":"","artikelname":""}. '
     + 'Unbekannte Felder = leerer String. Keine Spekulation.';
 
@@ -455,7 +451,7 @@ function handleLookupProduct(payload) {
   var body = {
     contents: [{ parts: [{ text: prompt }] }],
     tools: [{ google_search: {} }],
-    generationConfig: { maxOutputTokens: 250, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
+    generationConfig: { maxOutputTokens: 300, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
   };
 
   try {
