@@ -191,7 +191,6 @@ export function setLookupModal(state, ref, suggestion) {
     if (status) status.textContent = '';
     const sBtn = document.getElementById('lk-suggest-btn');
     if (sBtn) { sBtn.disabled = false; sBtn.textContent = 'Vorschlag laden'; }
-    setTimeout(() => document.getElementById('lk-hersteller').focus(), 0);
   }
 }
 
@@ -269,20 +268,6 @@ export function selectDefaultStatus() {
   for (const opt of sel.options) {
     if (opt.value.toLowerCase() === 'vorhanden') { sel.value = opt.value; return; }
   }
-}
-
-// Hersteller-Vorschläge (Spalte C aus "Bestellungen") fürs Eingabefeld – Freitext bleibt möglich
-export function populateHerstellerDatalist(names) {
-  const dl = document.getElementById('hersteller-list');
-  if (!dl) return;
-  dl.innerHTML = names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
-}
-
-// Kategorie-Vorschläge (Spalte D aus "Bestellungen") fürs Eingabefeld – Freitext bleibt möglich
-export function populateKategorieDatalist(names) {
-  const dl = document.getElementById('kategorie-list');
-  if (!dl) return;
-  dl.innerHTML = names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
 }
 
 export function showSearchRefInput(show, prefillText = '', btnLabel = 'Suchen') {

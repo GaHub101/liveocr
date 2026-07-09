@@ -14,7 +14,6 @@ import {
   populateStatusDropdown, showSearchRefInput,
   showStatusModal, getStatusModalValue, setStatusModalState,
   showModeSwitcher, setActiveModeSwitch,
-  populateHerstellerDatalist, populateKategorieDatalist,
   showReviewControls, showCameraSwitch, showZoomControl, getZoomValue,
   showRefExistsModal,
 } from './ui.js';
@@ -107,15 +106,19 @@ function joinNatural(items) {
 // sofern jeweils leer und eine ähnliche REF bekannt ist
 function prefillGuesses(ref) {
   const filled = [];
+  // Bei Text-Feldern (Hersteller/Kategorie) wird der Vorschlag komplett markiert,
+  // damit er sich durch einfaches Weitertippen sofort überschreiben lässt. Kein
+  // .select(), da das den Fokus stiehlt – setSelectionRange markiert stumm,
+  // ohne den Cursor aktiv zu setzen (kein Auto-Fokus beim Öffnen des Formulars)
   const herstellerInp = document.getElementById('lk-hersteller');
   if (herstellerInp && !herstellerInp.value.trim()) {
     const guess = guessHersteller(ref);
-    if (guess) { herstellerInp.value = guess; filled.push(`Hersteller "${guess}"`); }
+    if (guess) { herstellerInp.value = guess; herstellerInp.setSelectionRange(0, guess.length); filled.push(`Hersteller "${guess}"`); }
   }
   const katInp = document.getElementById('lk-cat');
   if (katInp && !katInp.value.trim()) {
     const guess = guessKategorie(ref);
-    if (guess) { katInp.value = guess; filled.push(`Kategorie "${guess}"`); }
+    if (guess) { katInp.value = guess; katInp.setSelectionRange(0, guess.length); filled.push(`Kategorie "${guess}"`); }
   }
   // lk-sup/lk-loc sind geschlossene <select>-Listen: Wert wird nur übernommen,
   // wenn er als <option> existiert (sonst bleibt die Selektion stumm leer)
@@ -206,8 +209,6 @@ async function main() {
     populateLocationDropdown(data.locations || []);
     cachedStatusValues = data.statusValues || [];
     populateStatusDropdown(cachedStatusValues);
-    populateHerstellerDatalist(data.hersteller || []);
-    populateKategorieDatalist(data.kategorien || []);
     cachedRefMap = data.refMap || [];
   }
   function refreshBootstrap() {
@@ -382,7 +383,6 @@ async function main() {
       showRefExistsModal(false);
       showSearchRefInput(true, duplicateRef, modeBtnLabels[userMode] || 'Weiter');
       searchRefInput.focus();
-      searchRefInput.select();
     });
 
     // "Vorschlag laden": Hersteller + REF an Gemini, befüllt Hersteller/Artikelname
