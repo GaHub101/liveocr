@@ -511,6 +511,7 @@ function handleLookupProduct(payload) {
     var model    = '';
     var attempts = 0;
     var result   = null;
+    var trace    = [];  // Diagnose: welche Stufe warum verworfen wurde
     // Jeder Fehler (auch "model not found" etc.) schaltet zur nächsten Stufe weiter;
     // nur bei Überlastung lohnt ein Retry auf derselben Stufe
     for (var i = 0; i < chain.length && (result === null || result.error); i++) {
@@ -518,6 +519,7 @@ function handleLookupProduct(payload) {
         attempts++;
         model  = chain[i].model;
         result = callGemini(model, chain[i].body);
+        if (result.error) trace.push(model + '=' + result.error.message);
         if (!isOverloaded(result)) break;
         Utilities.sleep(2000);
       }
@@ -533,11 +535,13 @@ function handleLookupProduct(payload) {
     var suggestion = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
 
     // Leere Vorschläge mit Diagnose loggen (finishReason MAX_TOKENS = Denk-Budget
-    // aufgebraucht, bevor das JSON kam; API-Fehler landen in result.error)
+    // aufgebraucht, bevor das JSON kam; API-Fehler landen in result.error).
+    // trace zeigt IMMER, welche vorherigen Stufen warum verworfen wurden.
     var empty = !(suggestion.hersteller || suggestion.artikelname);
     logUsage('lookupProduct', empty ? 'empty' : 'ok',
       'ref=' + ref + ' suchbegriff=' + suchbegriff + ' grounded=' + grounded
       + ' finish=' + finish + ' model=' + model + ' attempts=' + attempts
+      + (trace.length ? ' trace=[' + trace.join(' | ').substring(0, 300) + ']' : '')
       + (empty ? ' error=' + (result.error ? result.error.message : '–')
                + ' raw="' + raw.substring(0, 120) + '"' : ''));
     return jsonResponse({ status: 'ok', suggestion: suggestion });
