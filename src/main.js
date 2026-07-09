@@ -382,7 +382,9 @@ async function main() {
     refExistsEditBtn.addEventListener('click', () => {
       showRefExistsModal(false);
       showSearchRefInput(true, duplicateRef, modeBtnLabels[userMode] || 'Weiter');
-      searchRefInput.focus();
+      // Verzögert fokussieren – direkt nach display:none→block greift der
+      // Fokus auf manchen Mobilbrowsern nicht zuverlässig
+      setTimeout(() => searchRefInput.focus(), 0);
     });
 
     // "Vorschlag laden": Hersteller + REF an Gemini, befüllt Hersteller/Artikelname

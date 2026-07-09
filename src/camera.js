@@ -7,8 +7,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // während der Autofokus noch „pumpt" – ohne Fokus-applyConstraints
 // (CLAUDE.md / Commit 7b2dfc9). Liefert ein ImageBitmap oder null
 // (dann soll der Aufrufer den Video-Frame direkt nehmen).
-// 4 Frames über 400 ms reichen; mehr verzögert nur den OCR-Start.
-export async function captureSharpest({ video, imageCapture }, n = 4, spanMs = 400) {
+// 3 Frames über 240 ms genügen als Anti-Blur-Sicherheitsnetz, ohne die
+// Aufnahme spürbar zu verzögern – die Prüf-Vorschau vor dem Senden bleibt
+// als zweite Absicherung bestehen.
+export async function captureSharpest({ video, imageCapture }, n = 3, spanMs = 240) {
   const step = Math.max(60, Math.round(spanMs / n));
   let best = null;
   let bestScore = -1;
@@ -40,16 +42,6 @@ export async function captureSharpest({ video, imageCapture }, n = 4, spanMs = 4
       log.warn('camera', `Frame-Capture übersprungen [${err.name}]`);
     }
     if (i < n - 1) await sleep(step);
-  }
-
-  // Ein takePhoto()-Kandidat (auf manchen Geräten schärfer)
-  if (imageCapture && typeof imageCapture.takePhoto === 'function') {
-    try {
-      const blob = await imageCapture.takePhoto();
-      consider(await createImageBitmap(blob), 'photo');
-    } catch (err) {
-      log.warn('camera', `takePhoto übersprungen [${err.name}]`);
-    }
   }
 
   if (best) {
