@@ -455,23 +455,51 @@ function handleLookupProduct(payload) {
     + ' Antworte NUR als JSON: {"hersteller":"","artikelname":""}. '
     + 'Unbekannte Felder = leerer String. Keine Spekulation.';
 
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=' + apiKey;
-  var body = {
+  // Gemini 3: kein thinkingBudget mehr; Default-Thinking beibehalten (hilft der
+  // Vorschlagsqualität). maxOutputTokens muss Denk-Tokens + Websuche + JSON
+  // abdecken, sonst bricht die Antwort mit MAX_TOKENS vor dem JSON ab.
+  // Keine temperature setzen – Gemini 3 ist auf den Default 1.0 optimiert
+  var mainBody = {
     contents: [{ parts: [{ text: prompt }] }],
     tools: [{ google_search: {} }],
-    // Gemini 3: kein thinkingBudget mehr; Default-Thinking beibehalten (hilft der
-    // Vorschlagsqualität). maxOutputTokens muss Denk-Tokens + Websuche + JSON
-    // abdecken, sonst bricht die Antwort mit MAX_TOKENS vor dem JSON ab.
-    // Keine temperature setzen – Gemini 3 ist auf den Default 1.0 optimiert
     generationConfig: { maxOutputTokens: 4000 }
   };
+  // Fallback ohne Websuche (gemini-3.1-flash-lite), falls 3.5-flash überlastet bleibt
+  var fallbackBody = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { maxOutputTokens: 2000, thinkingConfig: { thinkingLevel: 'minimal' } }
+  };
+
+  function callGemini(model, body) {
+    var resp = UrlFetchApp.fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey,
+      { method: 'POST', contentType: 'application/json', payload: JSON.stringify(body), muteHttpExceptions: true }
+    );
+    return JSON.parse(resp.getContentText());
+  }
+
+  // Temporäre Überlastung ("high demand"/503) – lohnt einen erneuten Versuch
+  function isOverloaded(res) {
+    if (!res || !res.error) return false;
+    var msg = String(res.error.message || '');
+    return res.error.code === 503 || /high demand|overloaded|try again later/i.test(msg);
+  }
 
   try {
-    var resp     = UrlFetchApp.fetch(url, {
-      method: 'POST', contentType: 'application/json',
-      payload: JSON.stringify(body), muteHttpExceptions: true
-    });
-    var result   = JSON.parse(resp.getContentText());
+    var model    = 'gemini-3.5-flash';
+    var attempts = 0;
+    var result   = null;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      attempts++;
+      result = callGemini(model, mainBody);
+      if (!isOverloaded(result)) break;
+      Utilities.sleep(2000 * (attempt + 1));  // 2s, dann 4s Backoff
+    }
+    if (isOverloaded(result)) {
+      model  = 'gemini-3.1-flash-lite';
+      result = callGemini(model, fallbackBody);
+    }
+
     var cand     = (result.candidates && result.candidates[0]) || {};
     var grounded = !!cand.groundingMetadata;
     var finish   = cand.finishReason || '';
@@ -486,7 +514,7 @@ function handleLookupProduct(payload) {
     var empty = !(suggestion.hersteller || suggestion.artikelname);
     logUsage('lookupProduct', empty ? 'empty' : 'ok',
       'ref=' + ref + ' suchbegriff=' + suchbegriff + ' grounded=' + grounded
-      + ' finish=' + finish
+      + ' finish=' + finish + ' model=' + model + ' attempts=' + attempts
       + (empty ? ' error=' + (result.error ? result.error.message : '–')
                + ' raw="' + raw.substring(0, 120) + '"' : ''));
     return jsonResponse({ status: 'ok', suggestion: suggestion });
