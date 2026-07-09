@@ -351,8 +351,13 @@ function handleGeminiOcr(base64Image, mimeType) {
 
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=' + apiKey;
   var prompt = 'Read this product label and return ONLY a JSON object with one key:'
-    + ' "ref" = the REF code (digits, letters, hyphens or slashes — e.g. "630-0032", "012345A"),'
-    + ' typically next to or below "REF", often in a box. If unclear, best guess. If none visible: empty string "".'
+    + ' "ref" = the catalog/reference number: the code printed next to, below or inside the box'
+    + ' marked "REF" (also written "Ref"/"ref" or as the REF symbol; digits, letters, hyphens'
+    + ' or slashes — e.g. "630-0032", "012345A").'
+    + ' Labels often contain many other numbers — do NOT return the LOT/batch number,'
+    + ' GTIN/UDI or barcode digits, expiry or manufacturing dates, or quantities.'
+    + ' If there is no REF marking but the label shows exactly one obvious catalog number, return that.'
+    + ' If the REF is ambiguous or not clearly readable, return an empty string "" instead of guessing.'
     + ' Return ONLY the JSON object, no markdown code fences, no commentary.';
 
   var body = {
