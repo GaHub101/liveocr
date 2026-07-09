@@ -372,6 +372,10 @@
       padding: 16px;
     }
 
+    /* Titel/REF-Feld oben und Aktions-Buttons unten bleiben fix sichtbar;
+       nur der Formularbereich dazwischen scrollt. Verhindert, dass der
+       "Bestätigen"-Button verschwindet, wenn Tastatur/Adressleiste auf
+       Mobilgeräten die sichtbare Fläche verkleinern. */
     #lookup-modal {
       background: #1e293b;
       border: 1px solid #334155;
@@ -380,7 +384,8 @@
       width: 100%;
       max-width: 420px;
       max-height: 90dvh;
-      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
     }
 
     .lookup-title {
@@ -388,6 +393,7 @@
       font-size: 1rem;
       color: #f1f5f9;
       margin-bottom: 6px;
+      flex-shrink: 0;
     }
 
     .ref-label {
@@ -397,6 +403,7 @@
       font-size: 12px;
       color: #64748b;
       margin-bottom: 12px;
+      flex-shrink: 0;
     }
 
     .ref-label input {
@@ -414,6 +421,15 @@
       font-size: 13px;
       text-align: center;
       padding: 12px 0;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    #lookup-form {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
     }
 
     #lookup-form label {
@@ -441,6 +457,7 @@
       display: flex;
       gap: 8px;
       margin-top: 12px;
+      flex-shrink: 0;
     }
 
     #lookup-cancel-btn, #lookup-confirm-btn {
