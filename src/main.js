@@ -113,17 +113,14 @@ async function handleAddMode(text) {
   setLookupModal('form', text, null);
   if (sugg) document.getElementById('lk-hersteller').value = sugg;
   prefillGuesses(text);
-  setStatus('Hersteller wählen und "Vorschlag laden"', 'ready');
 }
 
 async function handleSearchMode(text) {
   document.getElementById('search-ref-input').value = text;
-  setStatus('REF prüfen und "Suchen" klicken', 'ready');
 }
 
 async function handleReorderMode(text) {
   document.getElementById('search-ref-input').value = text;
-  setStatus('REF prüfen und "Bestellen" klicken', 'ready');
 }
 
 
@@ -469,7 +466,7 @@ async function main() {
   reviewSendBtn.addEventListener('click', async () => {
     reviewSendBtn.disabled = true;
     reviewSendBtn.textContent = 'Sende…';
-    setStatus('Scannt…', 'working');
+    setStatus('', 'working');  // nur der pulsierende orange Punkt während der OCR
     // Panels zurücksetzen vor neuem Scan
     showSupplierLinks([], '');
     showLookupButton(false);
@@ -483,7 +480,7 @@ async function main() {
       lastText       = text;
       lastConfidence = confidence;
       showResult(text, confidence);
-      setStatus('Erkannt', 'ready');
+      setStatus('', 'ready');  // REF erkannt: nur der grüne Punkt
       // Add-Modus ohne erkannte REF: manuelle Eingabefelder zeigen
       // (mit REF öffnet handleAddMode direkt das Formular)
       if (!productId && userMode === 'add' && !text) {
