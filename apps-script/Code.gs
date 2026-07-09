@@ -349,7 +349,7 @@ function handleGeminiOcr(base64Image, mimeType) {
     return jsonResponse({ status: 'error', message: 'GEMINI_API_KEY nicht konfiguriert' });
   }
 
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=' + apiKey;
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=' + apiKey;
   var prompt = 'Read this product label and return ONLY a JSON object with one key:'
     + ' "ref" = the catalog/reference number: the code printed next to, below or inside the box'
     + ' marked "REF" (also written "Ref"/"ref" or as the REF symbol; digits, letters, hyphens'
@@ -365,7 +365,9 @@ function handleGeminiOcr(base64Image, mimeType) {
       { text: prompt },
       { inline_data: { mime_type: resolvedMime, data: base64Image } }
     ]}],
-    generationConfig: { maxOutputTokens: 100, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
+    // Gemini 3: thinkingLevel statt thinkingBudget; Denk-Tokens zählen aufs
+    // Output-Limit, daher maxOutputTokens grosszügiger als die reine JSON-Antwort
+    generationConfig: { maxOutputTokens: 500, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } }
   };
 
   var resp = UrlFetchApp.fetch(url, {
@@ -451,11 +453,13 @@ function handleLookupProduct(payload) {
     + ' Antworte NUR als JSON: {"hersteller":"","artikelname":""}. '
     + 'Unbekannte Felder = leerer String. Keine Spekulation.';
 
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=' + apiKey;
   var body = {
     contents: [{ parts: [{ text: prompt }] }],
     tools: [{ google_search: {} }],
-    generationConfig: { maxOutputTokens: 300, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
+    // Gemini 3: kein thinkingBudget mehr; Default-Thinking beibehalten (hilft der
+    // Vorschlagsqualität), maxOutputTokens deckt Denk-Tokens + JSON-Antwort ab
+    generationConfig: { maxOutputTokens: 1500, temperature: 0 }
   };
 
   try {
