@@ -129,7 +129,7 @@ Browser (Android Chrome)
       ├── src/camera.js   – getUserMedia, facingMode: environment
       ├── src/canvas.js   – Crop: Scan-Rahmen (80 % × 60 %, zentriert) + 20 px weißer Rand
       │                     Farbbild direkt an Gemini – kein Graustufen-/Binarisierungs-Schritt
-      ├── src/ocr.js      – Gemini 3.1 Flash-Lite via Apps Script Webhook; Frame als base64-JPEG
+      ├── src/ocr.js      – Gemini 3.5 Flash via Apps Script Webhook; Frame als base64-JPEG
       ├── src/send.js     – fetch() + localStorage Offline-Queue (OCR_Results / writeRef)
       ├── src/prices.js   – checkRef, lookupProduct, addProduct, getProductSuppliers,
       │                     markReorder, listSuppliers, listStatusValues, setOrderStatus
