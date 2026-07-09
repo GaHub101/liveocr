@@ -464,11 +464,20 @@ function handleLookupProduct(payload) {
     tools: [{ google_search: {} }],
     generationConfig: { maxOutputTokens: 4000 }
   };
-  // Fallback ohne Websuche (gemini-3.1-flash-lite), falls 3.5-flash überlastet bleibt
+  // Letzte Stufe ohne Websuche (gemini-3.1-flash-lite), falls beide Flash-Modelle überlastet sind
   var fallbackBody = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { maxOutputTokens: 2000, thinkingConfig: { thinkingLevel: 'minimal' } }
   };
+
+  // Ausweich-Kette bei Überlastung: erst das neueste Flash-Modell mit Websuche,
+  // dann die ältere (weniger nachgefragte) Flash-Generation ebenfalls mit Websuche,
+  // zuletzt Flash-Lite ohne Websuche – besser als gar kein Vorschlag
+  var chain = [
+    { model: 'gemini-3.5-flash',      body: mainBody,     tries: 2 },
+    { model: 'gemini-3-flash',        body: mainBody,     tries: 2 },
+    { model: 'gemini-3.1-flash-lite', body: fallbackBody, tries: 1 }
+  ];
 
   function callGemini(model, body) {
     var resp = UrlFetchApp.fetch(
@@ -486,18 +495,17 @@ function handleLookupProduct(payload) {
   }
 
   try {
-    var model    = 'gemini-3.5-flash';
+    var model    = '';
     var attempts = 0;
     var result   = null;
-    for (var attempt = 0; attempt < 3; attempt++) {
-      attempts++;
-      result = callGemini(model, mainBody);
-      if (!isOverloaded(result)) break;
-      Utilities.sleep(2000 * (attempt + 1));  // 2s, dann 4s Backoff
-    }
-    if (isOverloaded(result)) {
-      model  = 'gemini-3.1-flash-lite';
-      result = callGemini(model, fallbackBody);
+    for (var i = 0; i < chain.length && (result === null || isOverloaded(result)); i++) {
+      for (var t = 0; t < chain[i].tries; t++) {
+        attempts++;
+        model  = chain[i].model;
+        result = callGemini(model, chain[i].body);
+        if (!isOverloaded(result)) break;
+        Utilities.sleep(2000);
+      }
     }
 
     var cand     = (result.candidates && result.candidates[0]) || {};
