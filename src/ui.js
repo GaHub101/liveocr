@@ -357,3 +357,17 @@ export function setStatusModalState(state) {
   else if (state === 'sent')    { btn.disabled = true;  btn.textContent = 'Gespeichert ✓'; }
   else if (state === 'error')   { btn.disabled = false; btn.textContent = 'Fehler – Erneut versuchen'; }
 }
+
+// Meldung "REF bereits vorhanden" (Option A) – Abbruch zurück zum Scannen oder REF bearbeiten
+export function showRefExistsModal(show, ref, name) {
+  const backdrop = document.getElementById('ref-exists-backdrop');
+  if (!backdrop) return;
+  backdrop.style.display = show ? 'flex' : 'none';
+  if (show) {
+    const text = document.getElementById('ref-exists-text');
+    if (text) {
+      text.textContent = `Die REF-Nr. "${ref}" ist bereits vorhanden`
+        + (name ? ` (Produkt: "${name}")` : '') + '.';
+    }
+  }
+}
