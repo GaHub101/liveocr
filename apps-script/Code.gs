@@ -349,6 +349,7 @@ function handleGeminiOcr(base64Image, mimeType) {
     return jsonResponse({ status: 'error', message: 'GEMINI_API_KEY nicht konfiguriert' });
   }
 
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=' + apiKey;
   var prompt = 'Read this product label and return ONLY a JSON object with one key:'
     + ' "ref" = the catalog/reference number: the code printed next to, below or inside the box'
     + ' marked "REF" (also written "Ref"/"ref" or as the REF symbol; digits, letters, hyphens'
@@ -368,50 +369,31 @@ function handleGeminiOcr(base64Image, mimeType) {
     // Output-Limit, daher maxOutputTokens grosszügiger als die reine JSON-Antwort.
     // Keine temperature setzen – Gemini 3 ist auf den Default 1.0 optimiert,
     // niedrige Werte verursachen Schleifen/degradiertes Verhalten
-    generationConfig: { maxOutputTokens: 1000, thinkingConfig: { thinkingLevel: 'minimal' } }
+    generationConfig: { maxOutputTokens: 500, thinkingConfig: { thinkingLevel: 'minimal' } }
   };
 
-  // OCR primär auf gemini-3.5-flash (beste Lesequalität), bei Überlastung oder
-  // anderem Fehler Fallback auf gemini-3.1-flash-lite – ein Scan darf nie an
-  // einer Lastspitze scheitern
-  var ocrChain = [
-    { model: 'gemini-3.5-flash',      tries: 2 },
-    { model: 'gemini-3.1-flash-lite', tries: 1 }
-  ];
+  var resp = UrlFetchApp.fetch(url, {
+    method: 'POST',
+    contentType: 'application/json',
+    payload: JSON.stringify(body),
+    muteHttpExceptions: true
+  });
 
-  // Temporäre Überlastung ("high demand"/503) – lohnt einen erneuten Versuch
-  function isOverloaded(res) {
-    if (!res || !res.error) return false;
-    var msg = String(res.error.message || '');
-    return res.error.code === 503 || /high demand|overloaded|try again later/i.test(msg);
-  }
-
-  var result = null;
-  var usedModel = '';
-  for (var i = 0; i < ocrChain.length && (result === null || result.error); i++) {
-    for (var t = 0; t < ocrChain[i].tries; t++) {
-      usedModel = ocrChain[i].model;
-      var resp = UrlFetchApp.fetch(
-        'https://generativelanguage.googleapis.com/v1beta/models/' + usedModel + ':generateContent?key=' + apiKey,
-        { method: 'POST', contentType: 'application/json', payload: JSON.stringify(body), muteHttpExceptions: true }
-      );
-      var responseText = resp.getContentText();
-      // [FIX] JSON-Parse abgesichert – Parse-Fehler wie API-Fehler behandeln (nächste Stufe)
-      try {
-        result = JSON.parse(responseText);
-      } catch (parseErr) {
-        Logger.log('handleGeminiOcr: JSON-Parse-Fehler – ' + responseText.substring(0, 300));
-        result = { error: { message: 'Antwort nicht parsebar' } };
-      }
-      if (!isOverloaded(result)) break;
-      Utilities.sleep(2000);
-    }
+  var responseText = resp.getContentText();
+  var result;
+  // [FIX] JSON-Parse abgesichert
+  try {
+    result = JSON.parse(responseText);
+  } catch (parseErr) {
+    Logger.log('handleGeminiOcr: JSON-Parse-Fehler – ' + responseText.substring(0, 300));
+    logUsage('ocr', 'error', 'Gemini Antwort nicht parsebar');
+    return jsonResponse({ status: 'error', message: 'Gemini-Antwort konnte nicht verarbeitet werden' });
   }
 
   if (result.error) {
-    var errMsg = (result.error.code ? result.error.code + ': ' : '') + result.error.message;
+    var errMsg = result.error.code + ': ' + result.error.message;
     Logger.log('handleGeminiOcr: Gemini API Fehler – ' + errMsg);
-    logUsage('ocr', 'error', errMsg + ' model=' + usedModel);
+    logUsage('ocr', 'error', errMsg);
     return jsonResponse({ status: 'error', message: errMsg, raw: '' });
   }
 
@@ -442,8 +424,8 @@ function handleGeminiOcr(base64Image, mimeType) {
     ref = raw;
   }
 
-  Logger.log('handleGeminiOcr: raw="' + raw + '" ref=' + (ref || '(leer)') + ' model=' + usedModel);
-  logUsage('ocr', ref ? 'ok' : 'not_found', 'ref=' + (ref || '-') + ' model=' + usedModel);
+  Logger.log('handleGeminiOcr: raw="' + raw + '" ref=' + (ref || '(leer)'));
+  logUsage('ocr', ref ? 'ok' : 'not_found', 'ref=' + (ref || '-'));
   return jsonResponse({
     status: ref ? 'ok' : 'not_found',
     ref: ref,
@@ -473,6 +455,15 @@ function handleLookupProduct(payload) {
     + ' Antworte NUR als JSON: {"hersteller":"","artikelname":""}. '
     + 'Unbekannte Felder = leerer String. Keine Spekulation.';
 
+  // Gemini 2.5: klassische thinkingBudget/temperature-Parameter, liefert
+  // zuverlässig groundingMetadata (kein Gemini-3-Metadaten-Bug). Abschaltdatum
+  // von Google angekündigt: 16.10.2026 – danach greift automatisch die
+  // Gemini-3-Kette, dieser Stufe muss dann entfernt werden.
+  var legacyBody = {
+    contents: [{ parts: [{ text: prompt }] }],
+    tools: [{ google_search: {} }],
+    generationConfig: { maxOutputTokens: 800, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
+  };
   // Gemini 3: kein thinkingBudget mehr; Default-Thinking beibehalten (hilft der
   // Vorschlagsqualität). maxOutputTokens muss Denk-Tokens + Websuche + JSON
   // abdecken, sonst bricht die Antwort mit MAX_TOKENS vor dem JSON ab.
@@ -484,16 +475,18 @@ function handleLookupProduct(payload) {
     // abgerechnet werden nur tatsächlich generierte Tokens
     generationConfig: { maxOutputTokens: 8000 }
   };
-  // Letzte Stufe ohne Websuche (gemini-3.1-flash-lite), falls beide Flash-Modelle überlastet sind
+  // Letzte Stufe ohne Websuche (gemini-3.1-flash-lite), falls alle Websuche-Modelle überlastet sind
   var fallbackBody = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { maxOutputTokens: 2000, thinkingConfig: { thinkingLevel: 'minimal' } }
   };
 
-  // Ausweich-Kette bei Fehlern: erst das Pro-Flaggschiff mit Websuche (beste
-  // Qualität und Verfügbarkeit – Zuverlässigkeit geht hier vor Kosten), dann das
-  // schnellere Flash mit Websuche, zuletzt Flash-Lite ohne Websuche als Notreserve
+  // Ausweich-Kette bei Fehlern: erst das noch aktive Gemini-2.5-Modell mit
+  // zuverlässiger Websuche (bis Google es am 16.10.2026 abschaltet), dann das
+  // Pro-Flaggschiff mit Websuche, dann das schnellere Flash mit Websuche,
+  // zuletzt Flash-Lite ohne Websuche als Notreserve
   var chain = [
+    { model: 'gemini-2.5-flash',      body: legacyBody,   tries: 2 },
     { model: 'gemini-3.1-pro',        body: mainBody,     tries: 2 },
     { model: 'gemini-3.5-flash',      body: mainBody,     tries: 2 },
     { model: 'gemini-3.1-flash-lite', body: fallbackBody, tries: 1 }
@@ -518,6 +511,7 @@ function handleLookupProduct(payload) {
     var model    = '';
     var attempts = 0;
     var result   = null;
+    var trace    = [];  // Diagnose: welche Stufe warum verworfen wurde
     // Jeder Fehler (auch "model not found" etc.) schaltet zur nächsten Stufe weiter;
     // nur bei Überlastung lohnt ein Retry auf derselben Stufe
     for (var i = 0; i < chain.length && (result === null || result.error); i++) {
@@ -525,6 +519,7 @@ function handleLookupProduct(payload) {
         attempts++;
         model  = chain[i].model;
         result = callGemini(model, chain[i].body);
+        if (result.error) trace.push(model + '=' + result.error.message);
         if (!isOverloaded(result)) break;
         Utilities.sleep(2000);
       }
@@ -540,11 +535,13 @@ function handleLookupProduct(payload) {
     var suggestion = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
 
     // Leere Vorschläge mit Diagnose loggen (finishReason MAX_TOKENS = Denk-Budget
-    // aufgebraucht, bevor das JSON kam; API-Fehler landen in result.error)
+    // aufgebraucht, bevor das JSON kam; API-Fehler landen in result.error).
+    // trace zeigt IMMER, welche vorherigen Stufen warum verworfen wurden.
     var empty = !(suggestion.hersteller || suggestion.artikelname);
     logUsage('lookupProduct', empty ? 'empty' : 'ok',
       'ref=' + ref + ' suchbegriff=' + suchbegriff + ' grounded=' + grounded
       + ' finish=' + finish + ' model=' + model + ' attempts=' + attempts
+      + (trace.length ? ' trace=[' + trace.join(' | ').substring(0, 300) + ']' : '')
       + (empty ? ' error=' + (result.error ? result.error.message : '–')
                + ' raw="' + raw.substring(0, 120) + '"' : ''));
     return jsonResponse({ status: 'ok', suggestion: suggestion });
