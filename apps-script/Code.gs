@@ -349,6 +349,7 @@ function handleGeminiOcr(base64Image, mimeType) {
     return jsonResponse({ status: 'error', message: 'GEMINI_API_KEY nicht konfiguriert' });
   }
 
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=' + apiKey;
   var prompt = 'Read this product label and return ONLY a JSON object with one key:'
     + ' "ref" = the catalog/reference number: the code printed next to, below or inside the box'
     + ' marked "REF" (also written "Ref"/"ref" or as the REF symbol; digits, letters, hyphens'
@@ -368,50 +369,31 @@ function handleGeminiOcr(base64Image, mimeType) {
     // Output-Limit, daher maxOutputTokens grosszügiger als die reine JSON-Antwort.
     // Keine temperature setzen – Gemini 3 ist auf den Default 1.0 optimiert,
     // niedrige Werte verursachen Schleifen/degradiertes Verhalten
-    generationConfig: { maxOutputTokens: 1000, thinkingConfig: { thinkingLevel: 'minimal' } }
+    generationConfig: { maxOutputTokens: 500, thinkingConfig: { thinkingLevel: 'minimal' } }
   };
 
-  // OCR primär auf gemini-3.5-flash (beste Lesequalität), bei Überlastung oder
-  // anderem Fehler Fallback auf gemini-3.1-flash-lite – ein Scan darf nie an
-  // einer Lastspitze scheitern
-  var ocrChain = [
-    { model: 'gemini-3.5-flash',      tries: 2 },
-    { model: 'gemini-3.1-flash-lite', tries: 1 }
-  ];
+  var resp = UrlFetchApp.fetch(url, {
+    method: 'POST',
+    contentType: 'application/json',
+    payload: JSON.stringify(body),
+    muteHttpExceptions: true
+  });
 
-  // Temporäre Überlastung ("high demand"/503) – lohnt einen erneuten Versuch
-  function isOverloaded(res) {
-    if (!res || !res.error) return false;
-    var msg = String(res.error.message || '');
-    return res.error.code === 503 || /high demand|overloaded|try again later/i.test(msg);
-  }
-
-  var result = null;
-  var usedModel = '';
-  for (var i = 0; i < ocrChain.length && (result === null || result.error); i++) {
-    for (var t = 0; t < ocrChain[i].tries; t++) {
-      usedModel = ocrChain[i].model;
-      var resp = UrlFetchApp.fetch(
-        'https://generativelanguage.googleapis.com/v1beta/models/' + usedModel + ':generateContent?key=' + apiKey,
-        { method: 'POST', contentType: 'application/json', payload: JSON.stringify(body), muteHttpExceptions: true }
-      );
-      var responseText = resp.getContentText();
-      // [FIX] JSON-Parse abgesichert – Parse-Fehler wie API-Fehler behandeln (nächste Stufe)
-      try {
-        result = JSON.parse(responseText);
-      } catch (parseErr) {
-        Logger.log('handleGeminiOcr: JSON-Parse-Fehler – ' + responseText.substring(0, 300));
-        result = { error: { message: 'Antwort nicht parsebar' } };
-      }
-      if (!isOverloaded(result)) break;
-      Utilities.sleep(2000);
-    }
+  var responseText = resp.getContentText();
+  var result;
+  // [FIX] JSON-Parse abgesichert
+  try {
+    result = JSON.parse(responseText);
+  } catch (parseErr) {
+    Logger.log('handleGeminiOcr: JSON-Parse-Fehler – ' + responseText.substring(0, 300));
+    logUsage('ocr', 'error', 'Gemini Antwort nicht parsebar');
+    return jsonResponse({ status: 'error', message: 'Gemini-Antwort konnte nicht verarbeitet werden' });
   }
 
   if (result.error) {
-    var errMsg = (result.error.code ? result.error.code + ': ' : '') + result.error.message;
+    var errMsg = result.error.code + ': ' + result.error.message;
     Logger.log('handleGeminiOcr: Gemini API Fehler – ' + errMsg);
-    logUsage('ocr', 'error', errMsg + ' model=' + usedModel);
+    logUsage('ocr', 'error', errMsg);
     return jsonResponse({ status: 'error', message: errMsg, raw: '' });
   }
 
@@ -442,8 +424,8 @@ function handleGeminiOcr(base64Image, mimeType) {
     ref = raw;
   }
 
-  Logger.log('handleGeminiOcr: raw="' + raw + '" ref=' + (ref || '(leer)') + ' model=' + usedModel);
-  logUsage('ocr', ref ? 'ok' : 'not_found', 'ref=' + (ref || '-') + ' model=' + usedModel);
+  Logger.log('handleGeminiOcr: raw="' + raw + '" ref=' + (ref || '(leer)'));
+  logUsage('ocr', ref ? 'ok' : 'not_found', 'ref=' + (ref || '-'));
   return jsonResponse({
     status: ref ? 'ok' : 'not_found',
     ref: ref,
