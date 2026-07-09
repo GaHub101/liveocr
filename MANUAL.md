@@ -185,6 +185,8 @@ Du kannst den Scanner auch direkt unter `https://USERNAME.github.io/liveocr` öf
 
 #### Option A – Produkt hinzufügen
 
+> 📖 Ausführliche Schritt-für-Schritt-Anleitung mit Hintergrund-Erklärungen: [ANLEITUNG-PRODUKT-HINZUFUEGEN.md](ANLEITUNG-PRODUKT-HINZUFUEGEN.md)
+
 - Tipp auf **„Produkt hinzufügen"** → Kamera erscheint, Scan ausführen
 - Direkt nach dem Scan öffnet sich das Formular „Neues Produkt"
 - Felder:
