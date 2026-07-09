@@ -462,7 +462,9 @@ function handleLookupProduct(payload) {
   var mainBody = {
     contents: [{ parts: [{ text: prompt }] }],
     tools: [{ google_search: {} }],
-    generationConfig: { maxOutputTokens: 4000 }
+    // 8000 statt 4000: das Pro-Modell denkt mehr, Denk-Tokens zählen aufs Limit;
+    // abgerechnet werden nur tatsächlich generierte Tokens
+    generationConfig: { maxOutputTokens: 8000 }
   };
   // Letzte Stufe ohne Websuche (gemini-3.1-flash-lite), falls beide Flash-Modelle überlastet sind
   var fallbackBody = {
@@ -470,13 +472,13 @@ function handleLookupProduct(payload) {
     generationConfig: { maxOutputTokens: 2000, thinkingConfig: { thinkingLevel: 'minimal' } }
   };
 
-  // Ausweich-Kette bei Fehlern: erst das neueste Flash-Modell mit Websuche,
-  // dann die ältere (weniger nachgefragte) Flash-Generation ebenfalls mit Websuche,
-  // zuletzt Flash-Lite ohne Websuche – besser als gar kein Vorschlag
+  // Ausweich-Kette bei Fehlern: erst das Pro-Flaggschiff mit Websuche (beste
+  // Qualität und Verfügbarkeit – Zuverlässigkeit geht hier vor Kosten), dann das
+  // schnellere Flash mit Websuche, zuletzt Flash-Lite ohne Websuche als Notreserve
   var chain = [
-    { model: 'gemini-3.5-flash',        body: mainBody,     tries: 2 },
-    { model: 'gemini-3-flash-preview',  body: mainBody,     tries: 2 },
-    { model: 'gemini-3.1-flash-lite',   body: fallbackBody, tries: 1 }
+    { model: 'gemini-3.1-pro',        body: mainBody,     tries: 2 },
+    { model: 'gemini-3.5-flash',      body: mainBody,     tries: 2 },
+    { model: 'gemini-3.1-flash-lite', body: fallbackBody, tries: 1 }
   ];
 
   function callGemini(model, body) {

@@ -63,7 +63,7 @@ Standalone mode (no ?id=):
 
 ### OCR configuration
 
-Gemini 3.1 Flash-Lite (via Apps Script webhook `handleGeminiOcr`; Produktvorschlag `handleLookupProduct` nutzt Gemini 3.5 Flash mit Google-Search-Grounding):
+Gemini 3.1 Flash-Lite (via Apps Script webhook `handleGeminiOcr`; Produktvorschlag `handleLookupProduct` nutzt Gemini 3.1 Pro mit Google-Search-Grounding, Ausweich-Kette: 3.1 Pro → 3.5 Flash → 3.1 Flash-Lite ohne Websuche):
 - Canvas frame → downscaled 50 % on offscreen canvas → JPEG (quality 0.7) → base64 → POST `{ action: 'ocr', image, secret }`
 - Prompt is hardcoded in `Code.gs` (`handleGeminiOcr`), not sent from the client
 - `GEMINI_API_KEY` must be set in Apps Script Script Properties
