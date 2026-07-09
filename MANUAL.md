@@ -15,7 +15,7 @@ Eine Web-App, die auf Android-Geräten läuft, per Kamera Herstellerreferenzen v
 2. Du tippst auf den Button **„REF scannen"** → dein Browser öffnet `https://deinname.github.io/liveocr?id=42&name=Damon%20Brackets`
 3. Die App zeigt oben: **„Produkt: Damon Brackets"** und startet die Kamera
 4. Du hältst die Kamera auf das Etikett des Pakets – das Etikett in den **blauen Rahmen** positionieren
-5. Tippe auf **„Scannen"** – das Kamerabild wird an Gemini 2.5 Flash gesendet, das die REF-Nummer erkennt
+5. Tippe auf **„Scannen"** – das Kamerabild wird an Gemini 3.1 Flash-Lite gesendet, das die REF-Nummer erkennt
 6. Du siehst den erkannten Text, z.B. `OW-2241-A`
 7. Wenn der Text stimmt, tippe auf **„REF-Nr. hinzufügen"**
 8. Die App schickt `{ id: 42, ref: "OW-2241-A" }` per HTTP-POST an ein Google Apps Script
@@ -45,7 +45,7 @@ Eine Web-App, die auf Android-Geräten läuft, per Kamera Herstellerreferenzen v
 | **GitHub Pages** | Hostet die Web-App statisch – kein eigener Server nötig |
 | **`src/camera.js`** | Öffnet die Rückkamera des Geräts |
 | **`src/canvas.js`** | Schneidet den Scan-Rahmen (80 % × 60 %, zentriert) aus dem Kamerabild aus und sendet das **Farbbild** direkt an Gemini – keine Graustufen- oder Schwellwert-Verarbeitung |
-| **`src/ocr.js`** | Sendet das Kamerabild (50 % skaliert, JPEG q0.7) per POST an den Apps Script Webhook; Gemini 2.5 Flash erkennt die REF-Nummer serverseitig |
+| **`src/ocr.js`** | Sendet das Kamerabild (50 % skaliert, JPEG q0.7) per POST an den Apps Script Webhook; Gemini 3.1 Flash-Lite erkennt die REF-Nummer serverseitig |
 | **`src/send.js`** | Sendet das Ergebnis per POST an Apps Script; wenn offline → speichert in `localStorage` und sendet automatisch wenn Netzwerk zurückkommt |
 | **`src/prices.js`** | `checkRef`, `lookupProduct`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setOrderStatus` (alle als POST an Apps Script) |
 | **`src/logger.js`** | Ring-Buffer-Log (max. 300 Einträge, `localStorage`). Wird von allen Modulen genutzt. Debug-Overlay via `?debug` in der URL |
