@@ -159,15 +159,21 @@ async function main() {
     populateKategorieDatalist(data.kategorien || []);
     cachedRefMap = data.refMap || [];
   }
+  function refreshBootstrap() {
+    return bootstrap().then((data) => {
+      if (data) {
+        applyBootstrapData(data);
+        localStorage.setItem(BOOTSTRAP_CACHE_KEY, JSON.stringify(data));
+      }
+      return data;
+    });
+  }
   try {
     const cached = JSON.parse(localStorage.getItem(BOOTSTRAP_CACHE_KEY) || 'null');
     if (cached) applyBootstrapData(cached);
   } catch { /* defekter Cache – ignorieren */ }
-  bootstrap().then((data) => {
-    if (data) {
-      applyBootstrapData(data);
-      localStorage.setItem(BOOTSTRAP_CACHE_KEY, JSON.stringify(data));
-    } else {
+  refreshBootstrap().then((data) => {
+    if (!data) {
       // Fallback: Apps Script ohne bootstrap-Action deployed
       listSuppliers().then(names => populateSupplierDropdown(names));
       listLocations().then(locs => populateLocationDropdown(locs));
@@ -364,6 +370,9 @@ async function main() {
         if (vals.ref && (vals.hersteller || vals.category)) {
           cachedRefMap.push([vals.ref, vals.hersteller, vals.category]);
         }
+        // Dropdowns + refMap im Hintergrund neu laden, damit die neue
+        // Kategorie/der Hersteller beim nächsten Produkt in Liste und Vorauswahl stehen
+        refreshBootstrap().catch((err) => log.warn('main', `Bootstrap-Refresh fehlgeschlagen: ${err.message}`));
         setLookupModal('hidden');
         setStatus('Produkt angelegt ✓', 'ready');
         showLookupButton(false);
