@@ -366,8 +366,10 @@ function handleGeminiOcr(base64Image, mimeType) {
       { inline_data: { mime_type: resolvedMime, data: base64Image } }
     ]}],
     // Gemini 3: thinkingLevel statt thinkingBudget; Denk-Tokens zählen aufs
-    // Output-Limit, daher maxOutputTokens grosszügiger als die reine JSON-Antwort
-    generationConfig: { maxOutputTokens: 500, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } }
+    // Output-Limit, daher maxOutputTokens grosszügiger als die reine JSON-Antwort.
+    // Keine temperature setzen – Gemini 3 ist auf den Default 1.0 optimiert,
+    // niedrige Werte verursachen Schleifen/degradiertes Verhalten
+    generationConfig: { maxOutputTokens: 500, thinkingConfig: { thinkingLevel: 'minimal' } }
   };
 
   var resp = UrlFetchApp.fetch(url, {
@@ -458,8 +460,10 @@ function handleLookupProduct(payload) {
     contents: [{ parts: [{ text: prompt }] }],
     tools: [{ google_search: {} }],
     // Gemini 3: kein thinkingBudget mehr; Default-Thinking beibehalten (hilft der
-    // Vorschlagsqualität), maxOutputTokens deckt Denk-Tokens + JSON-Antwort ab
-    generationConfig: { maxOutputTokens: 1500, temperature: 0 }
+    // Vorschlagsqualität). maxOutputTokens muss Denk-Tokens + Websuche + JSON
+    // abdecken, sonst bricht die Antwort mit MAX_TOKENS vor dem JSON ab.
+    // Keine temperature setzen – Gemini 3 ist auf den Default 1.0 optimiert
+    generationConfig: { maxOutputTokens: 4000 }
   };
 
   try {
@@ -468,16 +472,23 @@ function handleLookupProduct(payload) {
       payload: JSON.stringify(body), muteHttpExceptions: true
     });
     var result   = JSON.parse(resp.getContentText());
-    var grounded = !!(result.candidates && result.candidates[0] && result.candidates[0].groundingMetadata);
-    var rParts   = (result.candidates && result.candidates[0] &&
-                    result.candidates[0].content && result.candidates[0].content.parts) || [];
+    var cand     = (result.candidates && result.candidates[0]) || {};
+    var grounded = !!cand.groundingMetadata;
+    var finish   = cand.finishReason || '';
+    var rParts   = (cand.content && cand.content.parts) || [];
     var textParts = rParts.filter(function(p) { return !p.thought && p.text; });
     var raw       = textParts.length > 0 ? textParts[textParts.length - 1].text.trim() : '{}';
     var jsonMatch = raw.match(/\{[\s\S]*\}/);
     var suggestion = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
 
-    logUsage('lookupProduct', 'ok',
-      'ref=' + ref + ' suchbegriff=' + suchbegriff + ' grounded=' + grounded);
+    // Leere Vorschläge mit Diagnose loggen (finishReason MAX_TOKENS = Denk-Budget
+    // aufgebraucht, bevor das JSON kam; API-Fehler landen in result.error)
+    var empty = !(suggestion.hersteller || suggestion.artikelname);
+    logUsage('lookupProduct', empty ? 'empty' : 'ok',
+      'ref=' + ref + ' suchbegriff=' + suchbegriff + ' grounded=' + grounded
+      + ' finish=' + finish
+      + (empty ? ' error=' + (result.error ? result.error.message : '–')
+               + ' raw="' + raw.substring(0, 120) + '"' : ''));
     return jsonResponse({ status: 'ok', suggestion: suggestion });
   } catch (err) {
     Logger.log('handleLookupProduct ERROR: ' + err.message);
