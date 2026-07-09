@@ -576,8 +576,10 @@ function handleBootstrap() {
   var statusValues = columnA(STATUS_SHEET);
 
   // Hersteller (Spalte C, unique) + Kategorien (Spalte D, unique) sowie
-  // REF→[Hersteller, Kategorie]-Tripel (F→C/D) aus "Bestellungen"
-  // für Dropdown-Vorschläge und die Vorauswahl anhand ähnlicher REFs
+  // REF→[Hersteller, Kategorie, Hauptlieferant, Lagerort]-Tupel (F→C/D/E/H)
+  // aus "Bestellungen" für Dropdown-Vorschläge und die Vorauswahl anhand
+  // ähnlicher REFs (Hauptlieferant/Lagerort selbst kommen aus den bereits
+  // oben gelesenen suppliers-/locations-Listen, keine eigene Unique-Liste nötig)
   var herstellerSeen = {};
   var hersteller = [];
   var kategorienSeen = {};
@@ -587,14 +589,16 @@ function handleBootstrap() {
   if (bSheet) {
     var lastRow = bSheet.getLastRow();
     if (lastRow > 1) {
-      var rows = bSheet.getRange(2, 3, lastRow - 1, 4).getValues();  // Spalten C–F
+      var rows = bSheet.getRange(2, 3, lastRow - 1, 6).getValues();  // Spalten C–H
       for (var j = 0; j < rows.length; j++) {
-        var h = String(rows[j][0] || '').trim();  // C: Hersteller
-        var k = String(rows[j][1] || '').trim();  // D: Kategorie
-        var r = String(rows[j][3] || '').trim();  // F: REF-Nummer
+        var h   = String(rows[j][0] || '').trim();  // C: Hersteller
+        var k   = String(rows[j][1] || '').trim();  // D: Kategorie
+        var sup = String(rows[j][2] || '').trim();  // E: Hauptlieferant
+        var r   = String(rows[j][3] || '').trim();  // F: REF-Nummer
+        var loc = String(rows[j][5] || '').trim();  // H: Lagerort
         if (h && !herstellerSeen[h]) { herstellerSeen[h] = true; hersteller.push(h); }
         if (k && !kategorienSeen[k]) { kategorienSeen[k] = true; kategorien.push(k); }
-        if (r && (h || k)) refMap.push([r, h, k]);
+        if (r && (h || k || sup || loc)) refMap.push([r, h, k, sup, loc]);
       }
       hersteller.sort(function(a, b) { return a.localeCompare(b); });
       kategorien.sort(function(a, b) { return a.localeCompare(b); });

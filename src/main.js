@@ -16,6 +16,7 @@ import {
   showModeSwitcher, setActiveModeSwitch,
   populateHerstellerDatalist, populateKategorieDatalist,
   showReviewControls, showCameraSwitch, showZoomControl, getZoomValue,
+  showRefExistsModal,
 } from './ui.js';
 import {
   checkRef, lookupProduct, addProduct, getProductSuppliers, markReorder,
@@ -52,8 +53,9 @@ let lastConfidence      = 0;
 let cachedSuppliers     = [];
 let lastFoundProductId  = null;  // ID der zuletzt im Sheet gefundenen REF
 let cachedStatusValues  = [];
-let cachedRefMap        = [];    // [REF, Hersteller, Kategorie]-Tripel aus dem Sheet für die Vorauswahl
+let cachedRefMap        = [];    // [REF, Hersteller, Kategorie, Hauptlieferant, Lagerort]-Tupel aus dem Sheet für die Vorauswahl
 let suggestRequestId    = 0;     // entwertet veraltete Vorschlag-Antworten nach erneutem Klick/Modal-Wechsel
+let duplicateRef        = '';    // REF, die aktuell im "Bereits vorhanden"-Dialog angezeigt wird
 
 const modeBtnLabels = { add: 'Weiter', search: 'Suchen', reorder: 'Bestellen' };
 
@@ -85,7 +87,24 @@ function guessKategorie(ref) {
   return (match && match[2]) || '';
 }
 
-// Suchbegriff- und Kategorie-Feld im Modal vorbelegen, sofern leer und eine ähnliche REF bekannt ist
+function guessHauptlieferant(ref) {
+  const match = bestRefMapMatch(ref);
+  return (match && match[3]) || '';
+}
+
+function guessLagerort(ref) {
+  const match = bestRefMapMatch(ref);
+  return (match && match[4]) || '';
+}
+
+// "A", "A und B" bzw. "A, B und C" statt "A und B und C"
+function joinNatural(items) {
+  if (items.length <= 1) return items.join('');
+  return `${items.slice(0, -1).join(', ')} und ${items[items.length - 1]}`;
+}
+
+// Suchbegriff-, Kategorie-, Hauptlieferant- und Lagerort-Feld im Modal vorbelegen,
+// sofern jeweils leer und eine ähnliche REF bekannt ist
 function prefillGuesses(ref) {
   const filled = [];
   const herstellerInp = document.getElementById('lk-hersteller');
@@ -98,17 +117,49 @@ function prefillGuesses(ref) {
     const guess = guessKategorie(ref);
     if (guess) { katInp.value = guess; filled.push(`Kategorie "${guess}"`); }
   }
+  // lk-sup/lk-loc sind geschlossene <select>-Listen: Wert wird nur übernommen,
+  // wenn er als <option> existiert (sonst bleibt die Selektion stumm leer)
+  const supSel = document.getElementById('lk-sup');
+  if (supSel && !supSel.value) {
+    const guess = guessHauptlieferant(ref);
+    if (guess) {
+      supSel.value = guess;
+      if (supSel.value === guess) filled.push(`Hauptlieferant "${guess}"`);
+    }
+  }
+  const locSel = document.getElementById('lk-loc');
+  if (locSel && !locSel.value) {
+    const guess = guessLagerort(ref);
+    if (guess) {
+      locSel.value = guess;
+      if (locSel.value === guess) filled.push(`Lagerort "${guess}"`);
+    }
+  }
   if (!filled.length) return;
-  setSuggestStatus(`${filled.join(' und ')} vorausgewählt – bitte prüfen`);
+  setSuggestStatus(`${joinNatural(filled)} vorausgewählt – bitte prüfen`);
   log.info('main', `Vorauswahl: ${filled.join(', ')} (ähnliche REF im Sheet)`);
+}
+
+// REF gegen das Sheet prüfen, bevor das Add-Formular geöffnet wird – bei
+// Treffer Duplikat-Meldung statt Formular (Wunsch: Abbruch oder REF bearbeiten)
+async function openAddForm(ref) {
+  const existing = await checkRef(ref);
+  if (existing.status === 'ok') {
+    duplicateRef = ref;
+    log.warn('main', `REF "${ref}" bereits vorhanden (Produkt: "${existing.name || '–'}") – Duplikat-Meldung`);
+    showRefExistsModal(true, ref, existing.name);
+    return;
+  }
+  showSearchRefInput(false);
+  showLookupButton(false);
+  suggestRequestId++;
+  setLookupModal('form', ref, null);
+  prefillGuesses(ref);
 }
 
 async function handleAddMode(text) {
   // Direkt ins Formular springen – REF ist dort editierbar, Cursor steht im Hersteller-Feld
-  showSearchRefInput(false);
-  suggestRequestId++;
-  setLookupModal('form', text, null);
-  prefillGuesses(text);
+  await openAddForm(text);
 }
 
 async function handleSearchMode(text) {
@@ -267,10 +318,7 @@ async function main() {
       if (!ref) return;
 
       if (userMode === 'add') {
-        showSearchRefInput(false);
-        suggestRequestId++;
-        setLookupModal('form', ref, null);
-        prefillGuesses(ref);
+        await openAddForm(ref);
         return;
       }
 
@@ -316,16 +364,26 @@ async function main() {
       }
     });
 
-    lookupBtn.addEventListener('click', () => {
+    lookupBtn.addEventListener('click', async () => {
       const ref = (searchRefInput && searchRefInput.value.trim()) || lastText;
       if (!ref) return;
-      showSearchRefInput(false);
-      showLookupButton(false);
-      suggestRequestId++;
-      setLookupModal('form', ref, null);
-      prefillGuesses(ref);
+      await openAddForm(ref);
     });
     lookupCancel.addEventListener('click', () => { setLookupModal('hidden'); resetToEditField(); });
+
+    // Duplikat-Meldung (Option A): Abbruch zurück zum Scannen oder REF direkt bearbeiten
+    const refExistsBackBtn = document.getElementById('ref-exists-back-btn');
+    const refExistsEditBtn = document.getElementById('ref-exists-edit-btn');
+    refExistsBackBtn.addEventListener('click', () => {
+      showRefExistsModal(false);
+      resetToEditField();
+    });
+    refExistsEditBtn.addEventListener('click', () => {
+      showRefExistsModal(false);
+      showSearchRefInput(true, duplicateRef, modeBtnLabels[userMode] || 'Weiter');
+      searchRefInput.focus();
+      searchRefInput.select();
+    });
 
     // "Vorschlag laden": Hersteller + REF an Gemini, befüllt Hersteller/Artikelname
     const suggestBtn      = document.getElementById('lk-suggest-btn');
@@ -366,9 +424,9 @@ async function main() {
       lookupConfirm.textContent = 'Speichern…';
       try {
         await addProduct(vals);
-        // Neues Tripel sofort für die Vorauswahl verfügbar machen
-        if (vals.ref && (vals.hersteller || vals.category)) {
-          cachedRefMap.push([vals.ref, vals.hersteller, vals.category]);
+        // Neues Tupel sofort für die Vorauswahl verfügbar machen
+        if (vals.ref && (vals.hersteller || vals.category || vals.hauptlieferant || vals.location)) {
+          cachedRefMap.push([vals.ref, vals.hersteller, vals.category, vals.hauptlieferant, vals.location]);
         }
         // Dropdowns + refMap im Hintergrund neu laden, damit die neue
         // Kategorie/der Hersteller beim nächsten Produkt in Liste und Vorauswahl stehen

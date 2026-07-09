@@ -673,6 +673,57 @@
     }
     #status-confirm-btn:disabled { opacity: 0.4; cursor: default; }
 
+    /* REF-Duplikat-Meldung (Option A – REF bereits vorhanden) */
+    #ref-exists-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 150;
+      padding: 16px;
+    }
+    #ref-exists-modal {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 20px 18px 16px;
+      width: 100%;
+      max-width: 380px;
+    }
+    #ref-exists-text {
+      font-size: 13px;
+      color: #cbd5e1;
+      margin: 10px 0 4px;
+      line-height: 1.5;
+    }
+    #ref-exists-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    #ref-exists-back-btn {
+      background: #334155;
+      flex: 1;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 10px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #ref-exists-edit-btn {
+      background: #1e40af;
+      flex: 1;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 10px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
     .log-entry { display: flex; gap: 6px; border-bottom: 1px solid #1e293b; padding: 2px 0; }
     .log-ts  { color: #475569; flex-shrink: 0; }
     .log-src { color: #7dd3fc; flex-shrink: 0; min-width: 60px; }
@@ -797,6 +848,17 @@
       <div id="status-actions">
         <button id="status-cancel-btn">Abbrechen</button>
         <button id="status-confirm-btn">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ref-exists-backdrop" style="display:none">
+    <div id="ref-exists-modal">
+      <div class="lookup-title">REF bereits vorhanden</div>
+      <div id="ref-exists-text"></div>
+      <div id="ref-exists-actions">
+        <button id="ref-exists-back-btn">Zurück zum Scannen</button>
+        <button id="ref-exists-edit-btn">REF bearbeiten</button>
       </div>
     </div>
   </div>
