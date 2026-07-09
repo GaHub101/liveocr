@@ -30,7 +30,7 @@ Single-page PWA (Vite + vite-plugin-pwa), no framework. `index.html` is the app 
 ```
 Camera (getUserMedia, rear-facing)
   → canvas.js  – crop to scan zone (80%×60%, centred), 20 px white padding, colour image
-  → ocr.js     – Gemini 3.1 Flash-Lite via Apps Script webhook; canvas frame → base64-JPEG → POST
+  → ocr.js     – Gemini 3.5 Flash via Apps Script webhook; canvas frame → base64-JPEG → POST
 
 ?id= mode (write + reorder):
   → main.js    – user clicks "REF-Nr. hinzufügen"
@@ -53,7 +53,7 @@ Standalone mode (no ?id=):
 |---|---|
 | `src/camera.js` | `getUserMedia`, rear camera (`facingMode: environment`) |
 | `src/canvas.js` | Crop to scan zone (80%×60%, centred) + 20 px white padding. Sends colour image directly to Gemini – no grayscale or binarisation. |
-| `src/ocr.js` | Gemini 3.1 Flash-Lite via Apps Script webhook. Canvas frame → downscaled 50 % → JPEG (q0.7) → base64 → POST. Prompt is hardcoded server-side. |
+| `src/ocr.js` | Gemini 3.5 Flash via Apps Script webhook (Fallback: 3.1 Flash-Lite). Canvas frame → downscaled 50 % → JPEG (q0.7) → base64 → POST. Prompt is hardcoded server-side. |
 | `src/send.js` | `fetch()` without `Content-Type` header (simple request, no CORS preflight). Offline queue in `localStorage` (`ocr_send_queue`), auto-flush on `online` event |
 | `src/prices.js` | `checkRef`, `lookupProduct`, `addProduct`, `getProductSuppliers`, `markReorder`, `bootstrap`, `listSuppliers`, `listStatusValues`, `setOrderStatus` – all POST to Apps Script. `bootstrap` fetches all dropdown data plus Hersteller and Kategorie lists and REF→[Hersteller, Kategorie] triples in one request; cached in `localStorage` (`ocr_bootstrap_cache`) for instant startup. The REF triples drive the Hersteller and Kategorie preselection (longest common prefix, no API call) |
 | `src/logger.js` | Ring-buffer log, max. 300 entries, `localStorage`. Debug overlay via `?debug` URL param |
@@ -63,7 +63,7 @@ Standalone mode (no ?id=):
 
 ### OCR configuration
 
-Gemini 3.1 Flash-Lite (via Apps Script webhook `handleGeminiOcr`; Produktvorschlag `handleLookupProduct` nutzt Gemini 3.1 Pro mit Google-Search-Grounding, Ausweich-Kette: 3.1 Pro → 3.5 Flash → 3.1 Flash-Lite ohne Websuche):
+OCR: Gemini 3.5 Flash, Fallback 3.1 Flash-Lite (via Apps Script webhook `handleGeminiOcr`). Produktvorschlag `handleLookupProduct`: Gemini 3.1 Pro mit Google-Search-Grounding, Ausweich-Kette 3.1 Pro → 3.5 Flash → 3.1 Flash-Lite ohne Websuche.
 - Canvas frame → downscaled 50 % on offscreen canvas → JPEG (quality 0.7) → base64 → POST `{ action: 'ocr', image, secret }`
 - Prompt is hardcoded in `Code.gs` (`handleGeminiOcr`), not sent from the client
 - `GEMINI_API_KEY` must be set in Apps Script Script Properties
