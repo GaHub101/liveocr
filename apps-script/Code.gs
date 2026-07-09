@@ -500,10 +500,13 @@ function handleBootstrap() {
   var locations    = columnA(LAGERORT_SHEET);
   var statusValues = columnA(STATUS_SHEET);
 
-  // Hersteller (Spalte C, unique) + REF→Hersteller-Paare (F→C) aus "Bestellungen"
-  // für Dropdown-Vorschläge und die Hersteller-Vorauswahl anhand ähnlicher REFs
+  // Hersteller (Spalte C, unique) + Kategorien (Spalte D, unique) sowie
+  // REF→[Hersteller, Kategorie]-Tripel (F→C/D) aus "Bestellungen"
+  // für Dropdown-Vorschläge und die Vorauswahl anhand ähnlicher REFs
   var herstellerSeen = {};
   var hersteller = [];
+  var kategorienSeen = {};
+  var kategorien = [];
   var refMap = [];
   var bSheet = ss.getSheetByName(BESTELLUNGEN_SHEET);
   if (bSheet) {
@@ -512,24 +515,28 @@ function handleBootstrap() {
       var rows = bSheet.getRange(2, 3, lastRow - 1, 4).getValues();  // Spalten C–F
       for (var j = 0; j < rows.length; j++) {
         var h = String(rows[j][0] || '').trim();  // C: Hersteller
+        var k = String(rows[j][1] || '').trim();  // D: Kategorie
         var r = String(rows[j][3] || '').trim();  // F: REF-Nummer
         if (h && !herstellerSeen[h]) { herstellerSeen[h] = true; hersteller.push(h); }
-        if (h && r) refMap.push([r, h]);
+        if (k && !kategorienSeen[k]) { kategorienSeen[k] = true; kategorien.push(k); }
+        if (r && (h || k)) refMap.push([r, h, k]);
       }
       hersteller.sort(function(a, b) { return a.localeCompare(b); });
+      kategorien.sort(function(a, b) { return a.localeCompare(b); });
     }
   }
 
   logUsage('bootstrap', 'ok',
     'suppliers=' + suppliers.length + ' locations=' + locations.length
     + ' status=' + statusValues.length + ' hersteller=' + hersteller.length
-    + ' refMap=' + refMap.length);
+    + ' kategorien=' + kategorien.length + ' refMap=' + refMap.length);
   return jsonResponse({
     status: 'ok',
     suppliers: suppliers,
     locations: locations,
     statusValues: statusValues,
     hersteller: hersteller,
+    kategorien: kategorien,
     refMap: refMap
   });
 }

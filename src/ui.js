@@ -278,6 +278,13 @@ export function populateHerstellerDatalist(names) {
   dl.innerHTML = names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
 }
 
+// Kategorie-Vorschläge (Spalte D aus "Bestellungen") fürs Eingabefeld – Freitext bleibt möglich
+export function populateKategorieDatalist(names) {
+  const dl = document.getElementById('kategorie-list');
+  if (!dl) return;
+  dl.innerHTML = names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
+}
+
 export function showSearchRefInput(show, prefillText = '', btnLabel = 'Suchen') {
   const inp    = document.getElementById('search-ref-input');
   const btn    = document.getElementById('search-confirm-btn');
