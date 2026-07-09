@@ -306,21 +306,6 @@ export function setActiveModeSwitch(mode) {
   });
 }
 
-// Suchvorschlag-Feld (Wishlist Pkt. 4) – Add: immer; Search/Reorder: nur bei REF-Miss
-// prefillText = null lässt einen manuell eingetippten Wert unangetastet
-export function showSearchSuggestionInput(show, prefillText = null) {
-  const inp = document.getElementById('search-suggestion-input');
-  if (!inp) return;
-  inp.style.display = show ? 'block' : 'none';
-  if (show && prefillText !== null && prefillText !== undefined) inp.value = prefillText;
-}
-
-export function getSearchSuggestionValue() {
-  const inp = document.getElementById('search-suggestion-input');
-  if (!inp || inp.style.display === 'none') return '';
-  return inp.value.trim();
-}
-
 export function populateLocationDropdown(locations) {
   const sel = document.getElementById('lk-loc');
   if (!sel) return;
