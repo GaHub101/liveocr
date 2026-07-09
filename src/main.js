@@ -15,7 +15,7 @@ import {
   showStatusModal, getStatusModalValue, setStatusModalState,
   showModeSwitcher, setActiveModeSwitch,
   showSearchSuggestionInput, getSearchSuggestionValue,
-  populateHerstellerDatalist,
+  populateHerstellerDatalist, populateKategorieDatalist,
   showReviewControls, showCameraSwitch, showZoomControl, getZoomValue,
 } from './ui.js';
 import {
@@ -53,37 +53,55 @@ let lastConfidence      = 0;
 let cachedSuppliers     = [];
 let lastFoundProductId  = null;  // ID der zuletzt im Sheet gefundenen REF
 let cachedStatusValues  = [];
-let cachedRefMap        = [];    // [REF, Hersteller]-Paare aus dem Sheet für die Hersteller-Vorauswahl
+let cachedRefMap        = [];    // [REF, Hersteller, Kategorie]-Tripel aus dem Sheet für die Vorauswahl
 let suggestRequestId    = 0;     // entwertet veraltete Vorschlag-Antworten nach erneutem Klick/Modal-Wechsel
 
 const modeBtnLabels = { add: 'Weiter', search: 'Suchen', reorder: 'Bestellen' };
 
-// Hersteller anhand ähnlicher REF-Codes aus dem Sheet raten (längster gemeinsamer Präfix).
+// Bestes refMap-Tripel anhand ähnlicher REF-Codes aus dem Sheet finden (längster gemeinsamer Präfix).
 // Wird mit jedem hinzugefügten Produkt besser – kein API-Call nötig.
-function guessHersteller(ref) {
+function bestRefMapMatch(ref) {
   const R = String(ref).toUpperCase();
-  if (R.length < 3) return '';
-  let best = '';
+  if (R.length < 3) return null;
+  let best = null;
   let bestLen = 0;
-  for (const pair of cachedRefMap) {
-    const r = String(pair[0]).toUpperCase();
+  for (const entry of cachedRefMap) {
+    const r = String(entry[0]).toUpperCase();
     const max = Math.min(r.length, R.length);
     let l = 0;
     while (l < max && r[l] === R[l]) l++;
-    if (l > bestLen) { bestLen = l; best = pair[1]; }
+    if (l > bestLen) { bestLen = l; best = entry; }
   }
-  return bestLen >= 3 ? best : '';
+  return bestLen >= 3 ? best : null;
 }
 
-// Hersteller-Feld im Modal vorbelegen, sofern leer und eine ähnliche REF bekannt ist
-function prefillHerstellerGuess(ref) {
-  const inp = document.getElementById('lk-hersteller');
-  if (!inp || inp.value.trim()) return;
-  const guess = guessHersteller(ref);
-  if (!guess) return;
-  inp.value = guess;
-  setSuggestStatus(`Hersteller "${guess}" vorausgewählt – bitte prüfen`);
-  log.info('main', `Hersteller-Vorauswahl: "${guess}" (ähnliche REF im Sheet)`);
+function guessHersteller(ref) {
+  const match = bestRefMapMatch(ref);
+  return (match && match[1]) || '';
+}
+
+// Alte Cache-Einträge sind noch [REF, Hersteller]-Paare – dann leerer String
+function guessKategorie(ref) {
+  const match = bestRefMapMatch(ref);
+  return (match && match[2]) || '';
+}
+
+// Suchbegriff- und Kategorie-Feld im Modal vorbelegen, sofern leer und eine ähnliche REF bekannt ist
+function prefillGuesses(ref) {
+  const filled = [];
+  const herstellerInp = document.getElementById('lk-hersteller');
+  if (herstellerInp && !herstellerInp.value.trim()) {
+    const guess = guessHersteller(ref);
+    if (guess) { herstellerInp.value = guess; filled.push(`Hersteller "${guess}"`); }
+  }
+  const katInp = document.getElementById('lk-cat');
+  if (katInp && !katInp.value.trim()) {
+    const guess = guessKategorie(ref);
+    if (guess) { katInp.value = guess; filled.push(`Kategorie "${guess}"`); }
+  }
+  if (!filled.length) return;
+  setSuggestStatus(`${filled.join(' und ')} vorausgewählt – bitte prüfen`);
+  log.info('main', `Vorauswahl: ${filled.join(', ')} (ähnliche REF im Sheet)`);
 }
 
 async function handleAddMode(text) {
@@ -94,7 +112,7 @@ async function handleAddMode(text) {
   suggestRequestId++;
   setLookupModal('form', text, null);
   if (sugg) document.getElementById('lk-hersteller').value = sugg;
-  else prefillHerstellerGuess(text);
+  prefillGuesses(text);
   setStatus('Hersteller wählen und "Vorschlag laden"', 'ready');
 }
 
@@ -145,6 +163,7 @@ async function main() {
     cachedStatusValues = data.statusValues || [];
     populateStatusDropdown(cachedStatusValues);
     populateHerstellerDatalist(data.hersteller || []);
+    populateKategorieDatalist(data.kategorien || []);
     cachedRefMap = data.refMap || [];
   }
   try {
@@ -258,7 +277,7 @@ async function main() {
         suggestRequestId++;
         setLookupModal('form', ref, null);
         if (sugg) document.getElementById('lk-hersteller').value = sugg;
-        else prefillHerstellerGuess(ref);
+        prefillGuesses(ref);
         return;
       }
 
@@ -319,7 +338,7 @@ async function main() {
       suggestRequestId++;
       setLookupModal('form', ref, null);
       if (sugg) document.getElementById('lk-hersteller').value = sugg;
-      else prefillHerstellerGuess(ref);
+      prefillGuesses(ref);
     });
     lookupCancel.addEventListener('click', () => { setLookupModal('hidden'); resetToEditField(); });
 
@@ -362,8 +381,10 @@ async function main() {
       lookupConfirm.textContent = 'Speichern…';
       try {
         await addProduct(vals);
-        // Neues Paar sofort für die Hersteller-Vorauswahl verfügbar machen
-        if (vals.ref && vals.hersteller) cachedRefMap.push([vals.ref, vals.hersteller]);
+        // Neues Tripel sofort für die Vorauswahl verfügbar machen
+        if (vals.ref && (vals.hersteller || vals.category)) {
+          cachedRefMap.push([vals.ref, vals.hersteller, vals.category]);
+        }
         setLookupModal('hidden');
         setStatus('Produkt angelegt ✓', 'ready');
         showLookupButton(false);
