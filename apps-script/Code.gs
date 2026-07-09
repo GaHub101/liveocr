@@ -455,6 +455,15 @@ function handleLookupProduct(payload) {
     + ' Antworte NUR als JSON: {"hersteller":"","artikelname":""}. '
     + 'Unbekannte Felder = leerer String. Keine Spekulation.';
 
+  // Gemini 2.5: klassische thinkingBudget/temperature-Parameter, liefert
+  // zuverlässig groundingMetadata (kein Gemini-3-Metadaten-Bug). Abschaltdatum
+  // von Google angekündigt: 16.10.2026 – danach greift automatisch die
+  // Gemini-3-Kette, dieser Stufe muss dann entfernt werden.
+  var legacyBody = {
+    contents: [{ parts: [{ text: prompt }] }],
+    tools: [{ google_search: {} }],
+    generationConfig: { maxOutputTokens: 800, temperature: 0, thinkingConfig: { thinkingBudget: 0 } }
+  };
   // Gemini 3: kein thinkingBudget mehr; Default-Thinking beibehalten (hilft der
   // Vorschlagsqualität). maxOutputTokens muss Denk-Tokens + Websuche + JSON
   // abdecken, sonst bricht die Antwort mit MAX_TOKENS vor dem JSON ab.
@@ -466,16 +475,18 @@ function handleLookupProduct(payload) {
     // abgerechnet werden nur tatsächlich generierte Tokens
     generationConfig: { maxOutputTokens: 8000 }
   };
-  // Letzte Stufe ohne Websuche (gemini-3.1-flash-lite), falls beide Flash-Modelle überlastet sind
+  // Letzte Stufe ohne Websuche (gemini-3.1-flash-lite), falls alle Websuche-Modelle überlastet sind
   var fallbackBody = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { maxOutputTokens: 2000, thinkingConfig: { thinkingLevel: 'minimal' } }
   };
 
-  // Ausweich-Kette bei Fehlern: erst das Pro-Flaggschiff mit Websuche (beste
-  // Qualität und Verfügbarkeit – Zuverlässigkeit geht hier vor Kosten), dann das
-  // schnellere Flash mit Websuche, zuletzt Flash-Lite ohne Websuche als Notreserve
+  // Ausweich-Kette bei Fehlern: erst das noch aktive Gemini-2.5-Modell mit
+  // zuverlässiger Websuche (bis Google es am 16.10.2026 abschaltet), dann das
+  // Pro-Flaggschiff mit Websuche, dann das schnellere Flash mit Websuche,
+  // zuletzt Flash-Lite ohne Websuche als Notreserve
   var chain = [
+    { model: 'gemini-2.5-flash',      body: legacyBody,   tries: 2 },
     { model: 'gemini-3.1-pro',        body: mainBody,     tries: 2 },
     { model: 'gemini-3.5-flash',      body: mainBody,     tries: 2 },
     { model: 'gemini-3.1-flash-lite', body: fallbackBody, tries: 1 }
