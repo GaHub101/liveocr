@@ -470,13 +470,13 @@ function handleLookupProduct(payload) {
     generationConfig: { maxOutputTokens: 2000, thinkingConfig: { thinkingLevel: 'minimal' } }
   };
 
-  // Ausweich-Kette bei Überlastung: erst das neueste Flash-Modell mit Websuche,
+  // Ausweich-Kette bei Fehlern: erst das neueste Flash-Modell mit Websuche,
   // dann die ältere (weniger nachgefragte) Flash-Generation ebenfalls mit Websuche,
   // zuletzt Flash-Lite ohne Websuche – besser als gar kein Vorschlag
   var chain = [
-    { model: 'gemini-3.5-flash',      body: mainBody,     tries: 2 },
-    { model: 'gemini-3-flash',        body: mainBody,     tries: 2 },
-    { model: 'gemini-3.1-flash-lite', body: fallbackBody, tries: 1 }
+    { model: 'gemini-3.5-flash',        body: mainBody,     tries: 2 },
+    { model: 'gemini-3-flash-preview',  body: mainBody,     tries: 2 },
+    { model: 'gemini-3.1-flash-lite',   body: fallbackBody, tries: 1 }
   ];
 
   function callGemini(model, body) {
@@ -498,7 +498,9 @@ function handleLookupProduct(payload) {
     var model    = '';
     var attempts = 0;
     var result   = null;
-    for (var i = 0; i < chain.length && (result === null || isOverloaded(result)); i++) {
+    // Jeder Fehler (auch "model not found" etc.) schaltet zur nächsten Stufe weiter;
+    // nur bei Überlastung lohnt ein Retry auf derselben Stufe
+    for (var i = 0; i < chain.length && (result === null || result.error); i++) {
       for (var t = 0; t < chain[i].tries; t++) {
         attempts++;
         model  = chain[i].model;
