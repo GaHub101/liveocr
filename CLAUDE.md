@@ -49,8 +49,9 @@ Standalone mode (no ?id=):
                               guessed from similar REFs, Bestellstatus defaults to "vorhanden") → Suchbegriff is a plain
                               text field (no datalist) with the guessed value pre-selected for instant overwrite,
                               Kategorie/Hauptlieferant/Lagerort are closed dropdowns pre-selected only if the guess matches an option,
-                              each with a trailing "+ Neu…" option (`ADD_NEW_VALUE` sentinel) that prompts for a new value,
-                              persists it via `addListValue` and adds it to the dropdown/localStorage cache in place →
+                              each with a trailing "+ Neu…" option (`ADD_NEW_VALUE` sentinel) that swaps the dropdown for an
+                              inline text input in place (no popup), stays editable, and is only persisted via `addListValue`
+                              when the form is actually saved (resolved to the dropdown/localStorage cache at that point) →
                               lookupProduct() → addProduct()
   → B) Produkt suchen       – scan → checkRef() → on hit: status modal (values from Bestellstatus tab) → setStatus()
                                                   on miss: "Neues Produkt anlegen" button (falls back to A, same duplicate guard)

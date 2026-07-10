@@ -453,6 +453,26 @@
       width: 100%;
     }
 
+    /* Inline "+ Neu…"-Eingabe (Kategorie/Hauptlieferant/Lagerort): ersetzt das
+       Dropdown an Ort und Stelle, kein Popup. Wert bleibt editierbar und wird
+       erst beim Speichern des Formulars angelegt. */
+    .new-value-row {
+      display: flex;
+      gap: 6px;
+    }
+    .new-value-row input { flex: 1; }
+    .new-value-back {
+      background: #334155;
+      border: none;
+      border-radius: 4px;
+      color: #cbd5e1;
+      font-size: 12px;
+      padding: 0 10px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
     #lookup-actions {
       display: flex;
       gap: 8px;
@@ -859,9 +879,27 @@
         </div>
         <label>Hersteller<input id="lk-manu" type="text"></label>
         <label>Artikelname *<input id="lk-name" type="text" required></label>
-        <label>Kategorie<select id="lk-cat"><option value="">– bitte wählen –</option></select></label>
-        <label>Hauptlieferant<select id="lk-sup"><option value="">– bitte wählen –</option></select></label>
-        <label>Lagerort<select id="lk-loc"><option value="">– bitte wählen –</option></select></label>
+        <label>Kategorie
+          <select id="lk-cat"><option value="">– bitte wählen –</option></select>
+          <div id="lk-cat-new" class="new-value-row" style="display:none">
+            <input id="lk-cat-new-input" type="text" placeholder="Neue Kategorie eingeben">
+            <button type="button" id="lk-cat-new-back" class="new-value-back">Liste</button>
+          </div>
+        </label>
+        <label>Hauptlieferant
+          <select id="lk-sup"><option value="">– bitte wählen –</option></select>
+          <div id="lk-sup-new" class="new-value-row" style="display:none">
+            <input id="lk-sup-new-input" type="text" placeholder="Neuen Lieferanten eingeben">
+            <button type="button" id="lk-sup-new-back" class="new-value-back">Liste</button>
+          </div>
+        </label>
+        <label>Lagerort
+          <select id="lk-loc"><option value="">– bitte wählen –</option></select>
+          <div id="lk-loc-new" class="new-value-row" style="display:none">
+            <input id="lk-loc-new-input" type="text" placeholder="Neuen Lagerort eingeben">
+            <button type="button" id="lk-loc-new-back" class="new-value-back">Liste</button>
+          </div>
+        </label>
         <label>Bestellstatus<select id="lk-status"><option value="">– bitte wählen –</option></select></label>
       </div>
       <div id="lookup-actions">

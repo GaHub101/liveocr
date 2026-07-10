@@ -194,6 +194,7 @@ export function setLookupModal(state, ref, suggestion, mode = 'add') {
   if (state === 'form') {
     ['lk-name','lk-hersteller','lk-manu','lk-cat','lk-sup','lk-loc','lk-status']
       .forEach(id => { document.getElementById(id).value = ''; });
+    ['lk-cat','lk-sup','lk-loc'].forEach(id => showNewValueField(id, false));
     selectDefaultStatus();
     const status = document.getElementById('lk-suggest-status');
     if (status) status.textContent = '';
@@ -239,14 +240,46 @@ export function setSuggestStatus(msg, state = 'idle') {
   }
 }
 
+// Kategorie/Hauptlieferant/Lagerort: geschlossenes Dropdown ODER inline
+// "+ Neu…"-Eingabe (an Ort und Stelle statt Popup, Wert bleibt bis zum
+// Speichern editierbar). isNewValueFieldActive/getNewValueFieldInput lesen
+// den jeweils sichtbaren Zustand, showNewValueField schaltet ihn um.
+export function isNewValueFieldActive(selectId) {
+  const row = document.getElementById(`${selectId}-new`);
+  return !!row && row.style.display !== 'none';
+}
+
+export function getNewValueFieldInput(selectId) {
+  const input = document.getElementById(`${selectId}-new-input`);
+  return input ? input.value.trim() : '';
+}
+
+export function showNewValueField(selectId, show) {
+  const select = document.getElementById(selectId);
+  const row    = document.getElementById(`${selectId}-new`);
+  const input  = document.getElementById(`${selectId}-new-input`);
+  if (!select || !row) return;
+  select.style.display = show ? 'none' : '';
+  row.style.display    = show ? 'flex' : 'none';
+  if (show && input) {
+    input.value = '';
+    setTimeout(() => input.focus(), 0);
+  }
+}
+
+function selectOrNewValue(selectId) {
+  if (isNewValueFieldActive(selectId)) return getNewValueFieldInput(selectId);
+  return document.getElementById(selectId).value.trim();
+}
+
 export function getLookupFormValues() {
   return {
     ref:            document.getElementById('lk-ref').value.trim(),
     name:           document.getElementById('lk-name').value.trim(),
     hersteller:     document.getElementById('lk-manu').value.trim(),
-    category:       document.getElementById('lk-cat').value.trim(),
-    hauptlieferant: document.getElementById('lk-sup').value.trim(),
-    location:       document.getElementById('lk-loc').value.trim(),
+    category:       selectOrNewValue('lk-cat'),
+    hauptlieferant: selectOrNewValue('lk-sup'),
+    location:       selectOrNewValue('lk-loc'),
     orderStatus:    document.getElementById('lk-status').value.trim(),
   };
 }
