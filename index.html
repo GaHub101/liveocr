@@ -717,8 +717,23 @@
     }
     #ref-exists-actions {
       display: flex;
+      flex-direction: column;
       gap: 8px;
       margin-top: 14px;
+    }
+    #ref-exists-actions-row {
+      display: flex;
+      gap: 8px;
+    }
+    .ref-exists-full-btn {
+      background: #15803d;
+      width: 100%;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 10px;
+      font-weight: 600;
+      cursor: pointer;
     }
     #ref-exists-back-btn {
       background: #334155;
@@ -833,13 +848,15 @@
 
   <div id="lookup-backdrop" style="display:none">
     <div id="lookup-modal">
-      <div class="lookup-title">Neues Produkt bestätigen</div>
+      <div class="lookup-title" id="lookup-modal-title">Neues Produkt bestätigen</div>
       <label class="ref-label">REF-Nr. *<input id="lk-ref" type="text"></label>
       <div id="lookup-loading">Suche läuft…</div>
       <div id="lookup-form" style="display:none">
-        <label>Suchbegriff *<input id="lk-hersteller" type="text" placeholder="Hersteller eintippen"></label>
-        <button id="lk-suggest-btn" type="button">Vorschlag laden</button>
-        <div id="lk-suggest-status"></div>
+        <div id="lk-suggest-section">
+          <label>Suchbegriff *<input id="lk-hersteller" type="text" placeholder="Hersteller eintippen"></label>
+          <button id="lk-suggest-btn" type="button">Vorschlag laden</button>
+          <div id="lk-suggest-status"></div>
+        </div>
         <label>Hersteller<input id="lk-manu" type="text"></label>
         <label>Artikelname *<input id="lk-name" type="text" required></label>
         <label>Kategorie<input id="lk-cat" type="text" placeholder="Kategorie eintippen"></label>
@@ -872,8 +889,11 @@
       <div class="lookup-title">REF bereits vorhanden</div>
       <div id="ref-exists-text"></div>
       <div id="ref-exists-actions">
-        <button id="ref-exists-back-btn">Zurück zum Scannen</button>
-        <button id="ref-exists-edit-btn">REF bearbeiten</button>
+        <button id="ref-exists-check-btn" class="ref-exists-full-btn">Produkteigenschaften überprüfen</button>
+        <div id="ref-exists-actions-row">
+          <button id="ref-exists-back-btn">Zurück zum Scannen</button>
+          <button id="ref-exists-edit-btn">REF bearbeiten</button>
+        </div>
       </div>
     </div>
   </div>

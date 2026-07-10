@@ -72,6 +72,14 @@ export async function addProduct(payload) {
   return data;
 }
 
+export async function updateProduct(payload) {
+  log.info('prices', `updateProduct: id=${payload.id}, ref="${payload.ref}", name="${payload.name ?? '–'}"`);
+  const data = await post({ action: 'updateProduct', ...payload });
+  if (data.status !== 'ok') throw new Error(data.message || 'Unbekannter Fehler');
+  log.info('prices', `updateProduct: Produkt aktualisiert – id=${payload.id}`);
+  return data;
+}
+
 export async function getProductSuppliers(productId) {
   try {
     const data = await post({ action: 'getProductSuppliers', id: productId });
