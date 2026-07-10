@@ -185,16 +185,20 @@ Du kannst den Scanner auch direkt unter `https://USERNAME.github.io/liveocr` öf
 
 #### Option A – Produkt hinzufügen
 
-- Tipp auf **„Produkt hinzufügen"** → Kamera erscheint, Scan ausführen
-- Direkt nach dem Scan öffnet sich das Formular „Neues Produkt"
+- Tipp auf **„Produkt hinzufügen"** → Kamera erscheint, Scan ausführen (oder REF-Nr. manuell eintippen)
+- **Duplikat-Prüfung:** Ist die REF bereits in `Bestellungen` vorhanden, erscheint statt des Formulars die Meldung **„REF bereits vorhanden"** (mit Produktname) und zwei Optionen:
+  - **Zurück zum Scannen** – bricht ab, REF-Feld wird geleert
+  - **REF bearbeiten** – REF-Feld bleibt mit der eingegebenen Nummer stehen und ist fokussiert, sodass sie korrigiert werden kann; erneutes Bestätigen prüft wieder
+- Ist die REF neu, öffnet sich das Formular „Neues Produkt" (kein Feld ist beim Öffnen automatisch fokussiert)
 - Felder:
-  - **Suchbegriff *** (z.B. Hersteller oder Produktbeschreibung) – auf **„Vorschlag laden"** tippen, Gemini füllt Artikelname, Hersteller, Kategorie und Alternativ-Lieferanten vor
+  - **Suchbegriff *** – Freitext (kein Dropdown); wird anhand ähnlicher REF-Nummern im Sheet vorausgefüllt und dabei komplett markiert, sodass sich der Vorschlag durch einfaches Weitertippen sofort überschreiben lässt. Auf **„Vorschlag laden"** tippen, Gemini füllt Artikelname und Hersteller vor (per Websuche)
+  - Hersteller (von „Vorschlag laden" befüllt, oder manuell)
   - **Artikelname *** (Pflicht)
-  - Kategorie
-  - **Hauptlieferant** (Dropdown – Werte aus dem „Lieferanten"-Tab)
-  - Alt. Lieferant 1–4 (Freitext, Namen exakt wie im „Lieferanten"-Tab)
-  - Artikelcode, Lagerort
-- Tipp auf **„Bestätigen"** – eine neue Zeile wird in `Bestellungen` angelegt (Spalte I bekommt automatisch `Nachbestellen`)
+  - Kategorie – Freitext, ebenfalls per ähnlicher REF vorausgefüllt und markiert
+  - **Hauptlieferant** (Dropdown – Werte aus dem „Lieferanten"-Tab, per ähnlicher REF vorausgewählt sofern der Wert als Option existiert)
+  - **Lagerort** (Dropdown – analog per ähnlicher REF vorausgewählt)
+  - Bestellstatus (Dropdown – Werte aus dem „Bestellstatus"-Tab, Vorauswahl „vorhanden")
+- Tipp auf **„Bestätigen"** – eine neue Zeile wird in `Bestellungen` angelegt (Spalte I bekommt den gewählten Bestellstatus, standardmäßig `vorhanden`)
 
 #### Option B – Produkt suchen
 
@@ -227,12 +231,14 @@ Im AppSheet-Modus (`?id=`) funktioniert der **„REF-Nr. hinzufügen"**-Button a
 
 ## Statusanzeigen
 
+Während des Scannens und direkt nach der Erkennung zeigt die App **nur den farbigen Punkt, ohne Text** – bei Fehlern oder Offline-Betrieb erscheint zusätzlich eine kurze Meldung.
+
 | Farbe des Punkts | Bedeutung |
 |---|---|
-| Grün | Bereit / Erkennung erfolgreich |
-| Gelb (blinkend) | Lädt / sendet gerade |
-| Orange | Gerät ist offline – Einträge werden gepuffert |
-| Rot | Fehler aufgetreten |
+| Grün | Bereit / REF erfolgreich erkannt |
+| Orange (pulsierend) | Bild wird gerade an Gemini gesendet und ausgewertet |
+| Orange (durchgehend) | Gerät ist offline – Einträge werden gepuffert (mit Meldungstext) |
+| Rot | Fehler aufgetreten (mit Meldungstext, z.B. „Kein REF gefunden – erneut versuchen") |
 
 ---
 

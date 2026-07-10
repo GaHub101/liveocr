@@ -26,6 +26,22 @@
 2. Prüf-Vorschau vor dem Senden („Senden" / „Neu aufnehmen").
 3. Tap-to-Focus-`applyConstraints` erneut entfernt; Auto-Wahl einer Ultraweit-/Nah-Kamera (`enumerateDevices`/`deviceId`) + manueller Umschalter + Hauptkamera-Fallback; **Zoom** als einziger erlaubter `applyConstraints`-Hebel (kein Fokus-Constraint → kein S24-AF-Regress).
 
+**Update (Geschwindigkeit):** Die Aufnahme fühlte sich trotz Sicherheitsnetz träge an. `takePhoto()` wurde als Kandidat entfernt (war laut obiger Ursachenanalyse ohnehin unzuverlässig für Schärfe, aber der mit Abstand langsamste Schritt – volle Foto-Pipeline mit AE/AF-Konvergenz). Die Frame-Stichprobe wurde von 4 Frames/400 ms auf 3 Frames/240 ms verkürzt. Die Anti-Blur-Logik (mehrere Frames vergleichen statt Sofort-Abgriff) und die Prüf-Vorschau vor dem Senden bleiben unverändert als Sicherheitsnetz bestehen.
+
+---
+
+### Gemini-2.5-Modelle von Google abgeschaltet – OCR und Produktvorschlag komplett ausgefallen
+**Status:** behoben
+**Symptom:** Jeder Scan schlug fehl mit `404: This model models/gemini-2.5-flash-lite is no longer available`. Kurz danach lieferte auch der Produktvorschlag ("Vorschlag laden") leere Ergebnisse trotz eindeutiger REF+Hersteller.
+**Ursache:** Google hat `gemini-2.5-flash-lite` (OCR-Modell) ersatzlos abgeschaltet. Der direkt migrierte Ersatz `gemini-3.5-flash` (Produktvorschlag) brachte zwei neue Probleme mit: (1) `temperature: 0` ist bei Gemini-3-Modellen kontraproduktiv – Google empfiehlt den Default 1.0, niedrigere Werte verursachen laut Doku Schleifen/degradiertes Verhalten; (2) Default-Thinking + Websuche konnten das `maxOutputTokens`-Budget aufbrauchen, bevor die JSON-Antwort geschrieben war (`finishReason: MAX_TOKENS`), was still als leerer Vorschlag ankam. Zusätzlich liefern Gemini-3-Modelle in der `generateContent`-Antwort oft kein `groundingMetadata` zurück, obwohl die Websuche nachweislich lief (bekannter, von Google dokumentierter API-Bug) – macht `grounded=false` im Log irreführend. On top kam es zu echten, temporären Überlastungsfehlern ("high demand") auf dem neu gelaunchten `gemini-3.5-flash`.
+**Fix:**
+1. OCR läuft auf `gemini-3.1-flash-lite` (stabiler Nachfolger für einfache Extraktion).
+2. Produktvorschlag nutzt eine Ausweich-Kette statt eines Einzelmodells: `gemini-2.5-flash` (noch aktiv bis Google-Abschaltung am 16.10.2026, liefert zuverlässig `groundingMetadata`) → `gemini-3.1-pro` → `gemini-3.5-flash` → `gemini-3.1-flash-lite` ohne Websuche als letzte Reserve. Bei Überlastung (503/„high demand") wird auf derselben Stufe bis zu zweimal mit Backoff erneut versucht, bei jedem anderen Fehler sofort zur nächsten Stufe gewechselt.
+3. `temperature` bei den Gemini-3-Aufrufen entfernt (Default 1.0 gilt), `maxOutputTokens` deutlich angehoben (OCR 100→500, Vorschlag bis 8000 bei den Websuche-Stufen).
+4. Diagnose-Logging erweitert: Jeder `lookupProduct`-Aufruf protokolliert im `Nutzungslog` `model=`, `attempts=` und bei durchgefallenen Zwischenstufen `trace=[...]` mit der jeweiligen Fehlermeldung – künftige Modell-Ausfälle sind damit sofort sichtbar statt stumm.
+
+**Wichtig:** Nach jeder `Code.gs`-Änderung ist ein manuelles Neu-Deployment im Apps-Script-Projekt nötig (Bereitstellungen verwalten → bestehende Bereitstellung → neue Version) – das GitHub-Pages-Deployment betrifft nur den Client.
+
 ---
 
 ### OCR funktionierte gar nicht (Worker-in-Worker)
@@ -79,6 +95,7 @@ langPath:   'https://tessdata.projectnaptha.com/4.0.0'
 |---|---|
 | Kein `Content-Type: application/json` Header | Vermeidet CORS-Preflight – Apps Script akzeptiert den Body via `e.postData.contents` |
 | Scan-Zone 80 % × 60 % | Breites Querformat deckt typische Label-Breite ab; 60 % Höhe erfasst auch mehrzeilige Labels |
-| Gemini statt lokalem OCR | Gemini 2.5 Flash erkennt REF-Codes auch bei schlechter Bildqualität zuverlässiger als lokales Tesseract (kein Konfidenzproblem bei Unschärfe) |
+| Gemini statt lokalem OCR | Gemini erkennt REF-Codes auch bei schlechter Bildqualität zuverlässiger als lokales Tesseract (kein Konfidenzproblem bei Unschärfe). Modell folgt Googles Lebenszyklus (aktuell `gemini-3.1-flash-lite`, siehe CLAUDE.md/„Gemini-2.5-Modelle abgeschaltet"-Eintrag oben) |
+| Ausweich-Kette statt Einzelmodell beim Produktvorschlag | Google schaltet Modelle mit Vorlauf ab und neue Modelle haben zeitweise Kapazitätsengpässe – eine mehrstufige Kette (aktuell aktives Modell → neuere Modelle → Fallback ohne Websuche) liefert auch bei Ausfall einer Stufe einen Vorschlag statt eines leeren Formulars |
 | Bild-Downscale 50 % + JPEG q0.7 | Payload-Reduktion von ~750 KB auf ~150 KB (−75 %); 404×236 px reichen Gemini für REF-Codes; Latenzgewinn ~500–1000 ms |
 | Shared Secret im Request | `WEBHOOK_SECRET` in Script Properties schützt den Webhook vor unbefugtem Zugriff ohne echtes Auth-System; Secret ist im kompilierten JS sichtbar (kein kryptografischer Schutz) |
