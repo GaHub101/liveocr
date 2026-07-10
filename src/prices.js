@@ -128,6 +128,23 @@ export async function listCategories() {
   }
 }
 
+// Neuen Wert in Kategorie-/Lagerort-/Lieferanten-Sheet anlegen ("+ Neu…" in den
+// jeweiligen Dropdowns). type: 'category' | 'location' | 'supplier'
+async function addListValue(type, value) {
+  try {
+    const data = await post({ action: 'addListValue', type, value });
+    log.info('prices', `addListValue: type=${type} value="${value}" → status=${data.status}`);
+    return data;
+  } catch (err) {
+    log.warn('prices', `addListValue fehlgeschlagen: type=${type} value="${value}" – ${err.message}`);
+    return { status: 'error', message: err.message };
+  }
+}
+
+export const addCategory = (value) => addListValue('category', value);
+export const addLocation = (value) => addListValue('location', value);
+export const addSupplier = (value) => addListValue('supplier', value);
+
 export async function listStatusValues() {
   try {
     const data = await post({ action: 'listStatusValues' });

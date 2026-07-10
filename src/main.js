@@ -15,11 +15,12 @@ import {
   showStatusModal, getStatusModalValue, setStatusModalState,
   showModeSwitcher, setActiveModeSwitch,
   showReviewControls, showCameraSwitch, showZoomControl, getZoomValue,
-  showRefExistsModal,
+  showRefExistsModal, ADD_NEW_VALUE,
 } from './ui.js';
 import {
   checkRef, lookupProduct, addProduct, updateProduct, getProductSuppliers, markReorder,
   bootstrap, listSuppliers, listLocations, listCategories, listStatusValues, setOrderStatus,
+  addCategory, addLocation, addSupplier,
 } from './prices.js';
 
 const video   = document.getElementById('video');
@@ -239,6 +240,18 @@ async function main() {
       return data;
     });
   }
+  // Nach "+ Neu…" (Kategorie/Hauptlieferant/Lagerort) den lokalen Cache
+  // aktualisieren, damit der neue Wert auch offline sofort verfügbar bleibt
+  const BOOTSTRAP_CACHE_KEYS = { category: 'categories', location: 'locations', supplier: 'suppliers' };
+  function persistBootstrapListValue(type, list) {
+    const key = BOOTSTRAP_CACHE_KEYS[type];
+    if (!key) return;
+    try {
+      const cached = JSON.parse(localStorage.getItem(BOOTSTRAP_CACHE_KEY) || 'null') || {};
+      cached[key] = list;
+      localStorage.setItem(BOOTSTRAP_CACHE_KEY, JSON.stringify(cached));
+    } catch { /* defekter Cache – ignorieren */ }
+  }
   try {
     const cached = JSON.parse(localStorage.getItem(BOOTSTRAP_CACHE_KEY) || 'null');
     if (cached) applyBootstrapData(cached);
@@ -440,6 +453,50 @@ async function main() {
     herstellerInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); loadSuggestion(); }
     });
+
+    // "+ Neu…"-Option in Kategorie/Hauptlieferant/Lagerort: fragt einen neuen
+    // Wert ab, legt ihn im jeweiligen Sheet an und übernimmt ihn ins Dropdown –
+    // ohne den restlichen Formularinhalt zu verlieren
+    const addNewLabels = { category: 'Kategorie', supplier: 'Lieferant', location: 'Lagerort' };
+    const addNewPrompts = {
+      category: 'Neue Kategorie eingeben:',
+      supplier: 'Neuen Lieferanten eingeben:',
+      location: 'Neuen Lagerort eingeben:',
+    };
+    function wireAddNewOption(selectEl, type, addFn, populateFn) {
+      let prevValue = selectEl.value;
+      selectEl.addEventListener('change', async () => {
+        if (selectEl.value !== ADD_NEW_VALUE) { prevValue = selectEl.value; return; }
+        const raw = window.prompt(addNewPrompts[type]);
+        const value = (raw || '').trim();
+        if (!value) { selectEl.value = prevValue; return; }
+
+        selectEl.disabled = true;
+        const result = await addFn(value);
+        selectEl.disabled = false;
+
+        if (result.status === 'ok' || result.status === 'already_exists') {
+          const existing = Array.from(selectEl.options)
+            .map((o) => o.value)
+            .filter((v) => v && v !== ADD_NEW_VALUE);
+          const match = existing.find((v) => v.toLowerCase() === value.toLowerCase());
+          const updated = match ? existing : [...existing, value].sort((a, b) => a.localeCompare(b));
+          const finalValue = match || value;
+          populateFn(updated);
+          selectEl.value = finalValue;
+          prevValue = finalValue;
+          persistBootstrapListValue(type, updated);
+          log.info('main', `${addNewLabels[type]} "${finalValue}" hinzugefügt`);
+        } else {
+          setStatus(result.message || `${addNewLabels[type]} konnte nicht angelegt werden`, 'error');
+          selectEl.value = prevValue;
+        }
+      });
+    }
+    wireAddNewOption(document.getElementById('lk-cat'), 'category', addCategory, populateCategoryDropdown);
+    wireAddNewOption(document.getElementById('lk-sup'), 'supplier', addSupplier, populateSupplierDropdown);
+    wireAddNewOption(document.getElementById('lk-loc'), 'location', addLocation, populateLocationDropdown);
+
     lookupConfirm.addEventListener('click', async () => {
       const vals = getLookupFormValues();
       if (!vals.name) { document.getElementById('lk-name').focus(); return; }
