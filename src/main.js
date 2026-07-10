@@ -7,7 +7,7 @@ import {
   setStatus, setLoadingMessage, hideLoading,
   showResult, setSendState, updateQueueBadge,
   showProductBanner, showSupplierLinks,
-  showLookupButton, setLookupModal, getLookupFormValues,
+  showLookupButton, setLookupModal, getLookupFormValues, fillLookupFormValues,
   showReorderButton, setReorderState,
   applyLookupSuggestion, setSuggestStatus,
   showModeSelector, populateSupplierDropdown, populateLocationDropdown,
@@ -18,7 +18,7 @@ import {
   showRefExistsModal,
 } from './ui.js';
 import {
-  checkRef, lookupProduct, addProduct, getProductSuppliers, markReorder,
+  checkRef, lookupProduct, addProduct, updateProduct, getProductSuppliers, markReorder,
   bootstrap, listSuppliers, listLocations, listStatusValues, setOrderStatus,
 } from './prices.js';
 
@@ -55,6 +55,8 @@ let cachedStatusValues  = [];
 let cachedRefMap        = [];    // [REF, Hersteller, Kategorie, Hauptlieferant, Lagerort]-Tupel aus dem Sheet für die Vorauswahl
 let suggestRequestId    = 0;     // entwertet veraltete Vorschlag-Antworten nach erneutem Klick/Modal-Wechsel
 let duplicateRef        = '';    // REF, die aktuell im "Bereits vorhanden"-Dialog angezeigt wird
+let duplicateExisting   = null;  // Sheet-Daten des Duplikats (für "Produkteigenschaften überprüfen")
+let editingProductId    = null;  // gesetzt, solange das Lookup-Formular ein bestehendes Produkt bearbeitet (statt anzulegen)
 
 const modeBtnLabels = { add: 'Weiter', search: 'Suchen', reorder: 'Bestellen' };
 
@@ -146,9 +148,11 @@ function prefillGuesses(ref) {
 // REF gegen das Sheet prüfen, bevor das Add-Formular geöffnet wird – bei
 // Treffer Duplikat-Meldung statt Formular (Wunsch: Abbruch oder REF bearbeiten)
 async function openAddForm(ref) {
+  editingProductId = null;
   const existing = await checkRef(ref);
   if (existing.status === 'ok') {
     duplicateRef = ref;
+    duplicateExisting = existing;
     log.warn('main', `REF "${ref}" bereits vorhanden (Produkt: "${existing.name || '–'}") – Duplikat-Meldung`);
     showRefExistsModal(true, ref, existing.name);
     return;
@@ -158,6 +162,17 @@ async function openAddForm(ref) {
   suggestRequestId++;
   setLookupModal('form', ref, null);
   prefillGuesses(ref);
+}
+
+// Formular zum Prüfen/Ändern eines bestehenden Produkts öffnen (Duplikat-Dialog
+// → "Produkteigenschaften überprüfen"). Werte kommen direkt aus dem Sheet.
+function openEditForm(ref, existing) {
+  editingProductId = existing.id;
+  showSearchRefInput(false);
+  showLookupButton(false);
+  suggestRequestId++;
+  setLookupModal('form', ref, null, 'edit');
+  fillLookupFormValues(existing);
 }
 
 async function handleAddMode(text) {
@@ -370,11 +385,13 @@ async function main() {
       if (!ref) return;
       await openAddForm(ref);
     });
-    lookupCancel.addEventListener('click', () => { setLookupModal('hidden'); resetToEditField(); });
+    lookupCancel.addEventListener('click', () => { editingProductId = null; setLookupModal('hidden'); resetToEditField(); });
 
-    // Duplikat-Meldung (Option A): Abbruch zurück zum Scannen oder REF direkt bearbeiten
-    const refExistsBackBtn = document.getElementById('ref-exists-back-btn');
-    const refExistsEditBtn = document.getElementById('ref-exists-edit-btn');
+    // Duplikat-Meldung (Option A): Abbruch zurück zum Scannen, REF direkt bearbeiten
+    // oder bestehende Produkteigenschaften prüfen/ändern
+    const refExistsBackBtn  = document.getElementById('ref-exists-back-btn');
+    const refExistsEditBtn  = document.getElementById('ref-exists-edit-btn');
+    const refExistsCheckBtn = document.getElementById('ref-exists-check-btn');
     refExistsBackBtn.addEventListener('click', () => {
       showRefExistsModal(false);
       resetToEditField();
@@ -385,6 +402,10 @@ async function main() {
       // Verzögert fokussieren – direkt nach display:none→block greift der
       // Fokus auf manchen Mobilbrowsern nicht zuverlässig
       setTimeout(() => searchRefInput.focus(), 0);
+    });
+    refExistsCheckBtn.addEventListener('click', () => {
+      showRefExistsModal(false);
+      openEditForm(duplicateRef, duplicateExisting || {});
     });
 
     // "Vorschlag laden": Hersteller + REF an Gemini, befüllt Hersteller/Artikelname
@@ -422,27 +443,36 @@ async function main() {
         const re = new RegExp(vals.hersteller.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
         vals.name = vals.name.replace(re, '').replace(/\s+/g, ' ').trim();
       }
+      const isEdit = !!editingProductId;
       lookupConfirm.disabled = true;
       lookupConfirm.textContent = 'Speichern…';
       try {
-        await addProduct(vals);
-        // Neues Tupel sofort für die Vorauswahl verfügbar machen
-        if (vals.ref && (vals.hersteller || vals.category || vals.hauptlieferant || vals.location)) {
-          cachedRefMap.push([vals.ref, vals.hersteller, vals.category, vals.hauptlieferant, vals.location]);
+        if (isEdit) {
+          await updateProduct({ id: editingProductId, ...vals });
+          editingProductId = null;
+          setLookupModal('hidden');
+          setStatus('Produkteigenschaften aktualisiert ✓', 'ready');
+          resetToEditField();
+        } else {
+          await addProduct(vals);
+          // Neues Tupel sofort für die Vorauswahl verfügbar machen
+          if (vals.ref && (vals.hersteller || vals.category || vals.hauptlieferant || vals.location)) {
+            cachedRefMap.push([vals.ref, vals.hersteller, vals.category, vals.hauptlieferant, vals.location]);
+          }
+          // Dropdowns + refMap im Hintergrund neu laden, damit die neue
+          // Kategorie/der Hersteller beim nächsten Produkt in Liste und Vorauswahl stehen
+          refreshBootstrap().catch((err) => log.warn('main', `Bootstrap-Refresh fehlgeschlagen: ${err.message}`));
+          setLookupModal('hidden');
+          setStatus('Produkt angelegt ✓', 'ready');
+          showLookupButton(false);
+          resetToEditField();
         }
-        // Dropdowns + refMap im Hintergrund neu laden, damit die neue
-        // Kategorie/der Hersteller beim nächsten Produkt in Liste und Vorauswahl stehen
-        refreshBootstrap().catch((err) => log.warn('main', `Bootstrap-Refresh fehlgeschlagen: ${err.message}`));
-        setLookupModal('hidden');
-        setStatus('Produkt angelegt ✓', 'ready');
-        showLookupButton(false);
-        resetToEditField();
       } catch (err) {
-        log.error('main', 'addProduct fehlgeschlagen', err);
+        log.error('main', isEdit ? 'updateProduct fehlgeschlagen' : 'addProduct fehlgeschlagen', err);
         setStatus(`Fehler: ${err.message}`, 'error');
       }
       lookupConfirm.disabled = false;
-      lookupConfirm.textContent = 'Bestätigen';
+      lookupConfirm.textContent = isEdit ? 'Speichern' : 'Bestätigen';
     });
 
     reorderBtn.addEventListener('click', async () => {
@@ -626,6 +656,7 @@ function switchMode(mode) {
   log.info('main', `Mode gewechselt: ${mode}`);
   setActiveModeSwitch(mode);
   // Modals + Sekundär-Buttons schließen
+  editingProductId = null;
   setLookupModal('hidden');
   showStatusModal(false);
   showSupplierLinks([], '');

@@ -169,11 +169,15 @@ export function setReorderState(state) {
   }
 }
 
-export function setLookupModal(state, ref, suggestion) {
-  const backdrop   = document.getElementById('lookup-backdrop');
-  const loading    = document.getElementById('lookup-loading');
-  const form       = document.getElementById('lookup-form');
-  const confirmBtn = document.getElementById('lookup-confirm-btn');
+// mode: 'add' (Neues Produkt anlegen) oder 'edit' (Produkteigenschaften überprüfen –
+// bestehende Werte werden vorausgefüllt, Suchbegriff/Vorschlag-Bereich entfällt)
+export function setLookupModal(state, ref, suggestion, mode = 'add') {
+  const backdrop      = document.getElementById('lookup-backdrop');
+  const loading       = document.getElementById('lookup-loading');
+  const form          = document.getElementById('lookup-form');
+  const confirmBtn    = document.getElementById('lookup-confirm-btn');
+  const title         = document.getElementById('lookup-modal-title');
+  const suggestSection = document.getElementById('lk-suggest-section');
 
   if (state === 'hidden') { backdrop.style.display = 'none'; return; }
   backdrop.style.display = 'flex';
@@ -182,6 +186,10 @@ export function setLookupModal(state, ref, suggestion) {
   loading.style.display    = state === 'loading' ? 'block' : 'none';
   form.style.display       = state === 'form'    ? 'block' : 'none';
   confirmBtn.style.display = state === 'form'    ? 'inline-block' : 'none';
+
+  if (title)      title.textContent      = mode === 'edit' ? 'Produkteigenschaften überprüfen' : 'Neues Produkt bestätigen';
+  if (confirmBtn) confirmBtn.textContent = mode === 'edit' ? 'Speichern' : 'Bestätigen';
+  if (suggestSection) suggestSection.style.display = mode === 'edit' ? 'none' : '';
 
   if (state === 'form') {
     ['lk-name','lk-hersteller','lk-manu','lk-cat','lk-sup','lk-loc','lk-status']
@@ -192,6 +200,20 @@ export function setLookupModal(state, ref, suggestion) {
     const sBtn = document.getElementById('lk-suggest-btn');
     if (sBtn) { sBtn.disabled = false; sBtn.textContent = 'Vorschlag laden'; }
   }
+}
+
+// Formularfelder mit bestehenden Sheet-Werten befüllen (Modus "edit")
+export function fillLookupFormValues(data) {
+  const d = data || {};
+  document.getElementById('lk-manu').value = d.hersteller || '';
+  document.getElementById('lk-name').value = d.name || '';
+  document.getElementById('lk-cat').value  = d.category || '';
+  const supSel = document.getElementById('lk-sup');
+  if (supSel) supSel.value = d.hauptlieferant || '';
+  const locSel = document.getElementById('lk-loc');
+  if (locSel) locSel.value = d.location || '';
+  const statusSel = document.getElementById('lk-status');
+  if (statusSel && d.orderStatus) statusSel.value = d.orderStatus;
 }
 
 export function applyLookupSuggestion(suggestion) {

@@ -94,6 +94,10 @@ function doPost(e) {
       return handleAddProduct(payload);
     }
 
+    if (payload.action === 'updateProduct') {
+      return handleUpdateProduct(payload);
+    }
+
     if (payload.action === 'getProductSuppliers') {
       return handleGetProductSuppliers(payload);
     }
@@ -304,10 +308,18 @@ function searchByRef(ref) {
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][REF_COL - 1]).trim() === String(ref).trim()) {
+      var row = data[i];
       return jsonResponse({
-        status: 'ok',
-        id:   data[i][0],
-        name: data[i][1]
+        status:         'ok',
+        id:             row[0],
+        name:           row[1],
+        hersteller:     row[2],
+        category:       row[3],
+        hauptlieferant: row[4],
+        ref:            row[5],
+        articleCode:    row[6],
+        location:       row[7],
+        orderStatus:    row[8]
       });
     }
   }
@@ -671,6 +683,65 @@ function handleAddProduct(payload) {
     Logger.log('addProduct: ref=' + ref + ' id=' + newId);
     logUsage('addProduct', 'ok', 'ref=' + ref + ' id=' + newId);
     return jsonResponse({ status: 'ok', id: newId });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bestehendes Produkt in "Bestellungen" aktualisieren (Option A – "Produkt-
+// eigenschaften überprüfen" im "REF bereits vorhanden"-Dialog)
+// ---------------------------------------------------------------------------
+
+function handleUpdateProduct(payload) {
+  var id = String(payload.id || '').trim();
+  if (!id) return jsonResponse({ status: 'error', message: 'id fehlt' });
+
+  var ref = String(payload.ref || '').trim();
+  if (!ref || !REF_PATTERN.test(ref)) {
+    return jsonResponse({ status: 'error', message: 'Ungültige REF' });
+  }
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(BESTELLUNGEN_SHEET);
+  if (!sheet) return jsonResponse({ status: 'error', message: 'Sheet "' + BESTELLUNGEN_SHEET + '" nicht gefunden' });
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (lockErr) {
+    return jsonResponse({ status: 'error', message: 'Server überlastet – bitte erneut versuchen' });
+  }
+
+  try {
+    var data = sheet.getDataRange().getValues();
+    var rowIndex = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][ID_COL_INDEX]).trim() === id) { rowIndex = i; break; }
+    }
+    if (rowIndex === -1) {
+      return jsonResponse({ status: 'error', message: 'Produkt nicht gefunden' });
+    }
+
+    // Duplikat-Check, falls REF geändert wurde (andere Zeile mit gleicher REF)
+    for (var j = 1; j < data.length; j++) {
+      if (j !== rowIndex && String(data[j][REF_COL - 1]).trim() === ref) {
+        return jsonResponse({ status: 'already_exists', message: 'REF bereits bei anderem Produkt vorhanden' });
+      }
+    }
+
+    var sheetRow = rowIndex + 1; // 1-based
+    sheet.getRange(sheetRow, 2, 1, 8).setValues([[
+      String(payload.name           || ''),                          // B: Artikelname
+      String(payload.hersteller     || ''),                          // C: Hersteller
+      String(payload.category       || ''),                          // D: Kategorie
+      String(payload.hauptlieferant || ''),                          // E: Hauptlieferant
+      ref,                                                            // F: REF-Nummer
+      String(payload.articleCode    || data[rowIndex][6] || ''),      // G: Artikelcode (unverändert, falls nicht mitgeschickt)
+      String(payload.location       || ''),                          // H: Lagerort
+      String(payload.orderStatus    || data[rowIndex][8] || ''),      // I: Bestellstatus
+    ]]);
+
+    Logger.log('updateProduct: id=' + id + ' ref=' + ref);
+    logUsage('updateProduct', 'ok', 'id=' + id + ' ref=' + ref);
+    return jsonResponse({ status: 'ok', id: id });
   } finally {
     lock.releaseLock();
   }

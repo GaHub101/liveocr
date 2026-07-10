@@ -40,7 +40,11 @@ Camera (getUserMedia, rear-facing)
 Standalone mode (no ?id=):
   → main.js    – mode-selector ("Was möchten Sie tun?") with three options A / B / C
   → A) Produkt hinzufügen   – scan/typed REF → openAddForm(ref): checkRef() guards against duplicates first;
-                              on hit: "REF bereits vorhanden" dialog ("Zurück zum Scannen" abort vs. "REF bearbeiten" retry);
+                              on hit: "REF bereits vorhanden" dialog ("Zurück zum Scannen" abort, "REF bearbeiten" retry,
+                              or "Produkteigenschaften überprüfen" → openEditForm(ref, existing): same modal styled as
+                              "Produkt hinzufügen" but titled "Produkteigenschaften überprüfen", pre-filled with the
+                              sheet's current values (checkRef now returns the full row) and editable in place →
+                              lookupConfirm calls updateProduct() (overwrites the matching row by id) instead of addProduct();
                               on miss: modal opens (no auto-focus; Hersteller, Kategorie, Hauptlieferant and Lagerort
                               guessed from similar REFs, Bestellstatus defaults to "vorhanden") → Suchbegriff/Kategorie
                               are plain text fields (no datalist) with the guessed value pre-selected for instant overwrite,
@@ -60,11 +64,11 @@ Standalone mode (no ?id=):
 | `src/canvas.js` | Crop to scan zone (80%×60%, centred) + 20 px white padding. Sends colour image directly to Gemini – no grayscale or binarisation. |
 | `src/ocr.js` | Gemini 3.1 Flash-Lite via Apps Script webhook. Canvas frame → downscaled 50 % → JPEG (q0.7) → base64 → POST. Prompt is hardcoded server-side. |
 | `src/send.js` | `fetch()` without `Content-Type` header (simple request, no CORS preflight). Offline queue in `localStorage` (`ocr_send_queue`), auto-flush on `online` event |
-| `src/prices.js` | `checkRef`, `lookupProduct`, `addProduct`, `getProductSuppliers`, `markReorder`, `bootstrap`, `listSuppliers`, `listStatusValues`, `setOrderStatus` – all POST to Apps Script. `bootstrap` fetches all dropdown data plus Hersteller and Kategorie lists and REF→[Hersteller, Kategorie, Hauptlieferant, Lagerort] tuples in one request; cached in `localStorage` (`ocr_bootstrap_cache`) for instant startup. The REF tuples drive the Hersteller, Kategorie, Hauptlieferant and Lagerort preselection (longest common prefix, no API call). `checkRef` also powers the duplicate-REF guard before the "Produkt hinzufügen" form opens |
+| `src/prices.js` | `checkRef`, `lookupProduct`, `addProduct`, `updateProduct`, `getProductSuppliers`, `markReorder`, `bootstrap`, `listSuppliers`, `listStatusValues`, `setOrderStatus` – all POST to Apps Script. `bootstrap` fetches all dropdown data plus Hersteller and Kategorie lists and REF→[Hersteller, Kategorie, Hauptlieferant, Lagerort] tuples in one request; cached in `localStorage` (`ocr_bootstrap_cache`) for instant startup. The REF tuples drive the Hersteller, Kategorie, Hauptlieferant and Lagerort preselection (longest common prefix, no API call). `checkRef` also powers the duplicate-REF guard before the "Produkt hinzufügen" form opens, and now returns the full row (Hersteller/Kategorie/Hauptlieferant/Lagerort/Bestellstatus/etc.) for the "Produkteigenschaften überprüfen" edit form. `updateProduct` overwrites an existing row by id (used by that edit form's "Speichern") |
 | `src/logger.js` | Ring-buffer log, max. 300 entries, `localStorage`. Debug overlay via `?debug` URL param |
 | `src/ui.js` | DOM updates: status (colour-only dot, no text for `working`/`ready`), result, banner, queue badge, supplier links, lookup modal, mode-selector, status modal, supplier/location dropdowns, `showRefExistsModal` (duplicate-REF dialog) |
 | `src/main.js` | Entry point. URL params: `?id=` (write+reorder), `?name=` (banner), `?debug`. Standalone shows mode-selector first; selected mode (`add`/`search`/`reorder`) branches the post-scan flow. |
-| `apps-script/Code.gs` | Google Apps Script webhook. Actions: `ocr`, `checkRef`/`search`, `lookupProduct`, `bootstrap`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setStatus`, `writeRef` (id present), `appendLog` (standalone) |
+| `apps-script/Code.gs` | Google Apps Script webhook. Actions: `ocr`, `checkRef`/`search`, `lookupProduct`, `bootstrap`, `addProduct`, `updateProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setStatus`, `writeRef` (id present), `appendLog` (standalone) |
 
 ### OCR configuration
 
