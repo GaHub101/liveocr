@@ -17,6 +17,9 @@
  *
  * Sheet-Struktur "Bestellstatus" (Spalte A ab Zeile 2 = mögliche Werte für
  *   Spalte I in "Bestellungen"; Header in Zeile 1).
+ *
+ * Sheet-Struktur "Kategorie" (Spalte A ab Zeile 2 = mögliche Werte für
+ *   Spalte D in "Bestellungen"; Header in Zeile 1).
  */
 
 var BESTELLUNGEN_SHEET       = 'Bestellungen';
@@ -25,6 +28,7 @@ var USAGE_LOG_SHEET          = 'Nutzungslog';
 var SUPPLIERS_SHEET          = 'Lieferanten';
 var STATUS_SHEET             = 'Bestellstatus';
 var LAGERORT_SHEET           = 'Lagerort';
+var CATEGORY_SHEET           = 'Kategorie';
 var REF_COL                  = 6;   // Spalte F (1-based)
 var STATUS_COL               = 9;   // Spalte I, Bestellstatus (1-based)
 var ID_COL_INDEX             = 0;   // Spalte A (0-based)
@@ -116,6 +120,10 @@ function doPost(e) {
 
     if (payload.action === 'listLocations') {
       return handleListLocations();
+    }
+
+    if (payload.action === 'listCategories') {
+      return handleListCategories();
     }
 
     if (payload.action === 'setStatus') {
@@ -586,16 +594,15 @@ function handleBootstrap() {
   var suppliers    = columnA(SUPPLIERS_SHEET);
   var locations    = columnA(LAGERORT_SHEET);
   var statusValues = columnA(STATUS_SHEET);
+  var categories   = columnA(CATEGORY_SHEET);
 
-  // Hersteller (Spalte C, unique) + Kategorien (Spalte D, unique) sowie
-  // REF→[Hersteller, Kategorie, Hauptlieferant, Lagerort]-Tupel (F→C/D/E/H)
-  // aus "Bestellungen" für Dropdown-Vorschläge und die Vorauswahl anhand
-  // ähnlicher REFs (Hauptlieferant/Lagerort selbst kommen aus den bereits
-  // oben gelesenen suppliers-/locations-Listen, keine eigene Unique-Liste nötig)
+  // Hersteller (Spalte C, unique) sowie REF→[Hersteller, Kategorie,
+  // Hauptlieferant, Lagerort]-Tupel (F→C/D/E/H) aus "Bestellungen" für
+  // Dropdown-Vorschläge und die Vorauswahl anhand ähnlicher REFs (Kategorie/
+  // Hauptlieferant/Lagerort selbst kommen aus den bereits oben gelesenen
+  // categories-/suppliers-/locations-Listen, keine eigene Unique-Liste nötig)
   var herstellerSeen = {};
   var hersteller = [];
-  var kategorienSeen = {};
-  var kategorien = [];
   var refMap = [];
   var bSheet = ss.getSheetByName(BESTELLUNGEN_SHEET);
   if (bSheet) {
@@ -609,25 +616,23 @@ function handleBootstrap() {
         var r   = String(rows[j][3] || '').trim();  // F: REF-Nummer
         var loc = String(rows[j][5] || '').trim();  // H: Lagerort
         if (h && !herstellerSeen[h]) { herstellerSeen[h] = true; hersteller.push(h); }
-        if (k && !kategorienSeen[k]) { kategorienSeen[k] = true; kategorien.push(k); }
         if (r && (h || k || sup || loc)) refMap.push([r, h, k, sup, loc]);
       }
       hersteller.sort(function(a, b) { return a.localeCompare(b); });
-      kategorien.sort(function(a, b) { return a.localeCompare(b); });
     }
   }
 
   logUsage('bootstrap', 'ok',
     'suppliers=' + suppliers.length + ' locations=' + locations.length
     + ' status=' + statusValues.length + ' hersteller=' + hersteller.length
-    + ' kategorien=' + kategorien.length + ' refMap=' + refMap.length);
+    + ' categories=' + categories.length + ' refMap=' + refMap.length);
   return jsonResponse({
     status: 'ok',
     suppliers: suppliers,
     locations: locations,
     statusValues: statusValues,
     hersteller: hersteller,
-    kategorien: kategorien,
+    categories: categories,
     refMap: refMap
   });
 }
@@ -896,6 +901,26 @@ function handleListLocations() {
   }
   logUsage('listLocations', 'ok', 'count=' + locations.length);
   return jsonResponse({ status: 'ok', locations: locations });
+}
+
+// ---------------------------------------------------------------------------
+// Kategorien – Spalte A des "Kategorie"-Tabs
+// ---------------------------------------------------------------------------
+
+function handleListCategories() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CATEGORY_SHEET);
+  if (!sheet) {
+    logUsage('listCategories', 'error', 'Sheet "' + CATEGORY_SHEET + '" nicht gefunden');
+    return jsonResponse({ status: 'ok', categories: [] });
+  }
+  var data = sheet.getDataRange().getValues();
+  var categories = [];
+  for (var i = 1; i < data.length; i++) {
+    var c = String(data[i][0] || '').trim();
+    if (c) categories.push(c);
+  }
+  logUsage('listCategories', 'ok', 'count=' + categories.length);
+  return jsonResponse({ status: 'ok', categories: categories });
 }
 
 // ---------------------------------------------------------------------------

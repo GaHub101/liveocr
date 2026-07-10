@@ -11,7 +11,7 @@ import {
   showReorderButton, setReorderState,
   applyLookupSuggestion, setSuggestStatus,
   showModeSelector, populateSupplierDropdown, populateLocationDropdown,
-  populateStatusDropdown, showSearchRefInput,
+  populateCategoryDropdown, populateStatusDropdown, showSearchRefInput,
   showStatusModal, getStatusModalValue, setStatusModalState,
   showModeSwitcher, setActiveModeSwitch,
   showReviewControls, showCameraSwitch, showZoomControl, getZoomValue,
@@ -19,7 +19,7 @@ import {
 } from './ui.js';
 import {
   checkRef, lookupProduct, addProduct, updateProduct, getProductSuppliers, markReorder,
-  bootstrap, listSuppliers, listLocations, listStatusValues, setOrderStatus,
+  bootstrap, listSuppliers, listLocations, listCategories, listStatusValues, setOrderStatus,
 } from './prices.js';
 
 const video   = document.getElementById('video');
@@ -108,22 +108,25 @@ function joinNatural(items) {
 // sofern jeweils leer und eine ähnliche REF bekannt ist
 function prefillGuesses(ref) {
   const filled = [];
-  // Bei Text-Feldern (Hersteller/Kategorie) wird der Vorschlag komplett markiert,
-  // damit er sich durch einfaches Weitertippen sofort überschreiben lässt. Kein
-  // .select(), da das den Fokus stiehlt – setSelectionRange markiert stumm,
-  // ohne den Cursor aktiv zu setzen (kein Auto-Fokus beim Öffnen des Formulars)
+  // Beim Text-Feld (Hersteller) wird der Vorschlag komplett markiert, damit er
+  // sich durch einfaches Weitertippen sofort überschreiben lässt. Kein .select(),
+  // da das den Fokus stiehlt – setSelectionRange markiert stumm, ohne den Cursor
+  // aktiv zu setzen (kein Auto-Fokus beim Öffnen des Formulars)
   const herstellerInp = document.getElementById('lk-hersteller');
   if (herstellerInp && !herstellerInp.value.trim()) {
     const guess = guessHersteller(ref);
     if (guess) { herstellerInp.value = guess; herstellerInp.setSelectionRange(0, guess.length); filled.push(`Hersteller "${guess}"`); }
   }
-  const katInp = document.getElementById('lk-cat');
-  if (katInp && !katInp.value.trim()) {
+  // lk-cat/lk-sup/lk-loc sind geschlossene <select>-Listen: Wert wird nur
+  // übernommen, wenn er als <option> existiert (sonst bleibt die Selektion stumm leer)
+  const katSel = document.getElementById('lk-cat');
+  if (katSel && !katSel.value) {
     const guess = guessKategorie(ref);
-    if (guess) { katInp.value = guess; katInp.setSelectionRange(0, guess.length); filled.push(`Kategorie "${guess}"`); }
+    if (guess) {
+      katSel.value = guess;
+      if (katSel.value === guess) filled.push(`Kategorie "${guess}"`);
+    }
   }
-  // lk-sup/lk-loc sind geschlossene <select>-Listen: Wert wird nur übernommen,
-  // wenn er als <option> existiert (sonst bleibt die Selektion stumm leer)
   const supSel = document.getElementById('lk-sup');
   if (supSel && !supSel.value) {
     const guess = guessHauptlieferant(ref);
@@ -222,6 +225,7 @@ async function main() {
   function applyBootstrapData(data) {
     populateSupplierDropdown(data.suppliers || []);
     populateLocationDropdown(data.locations || []);
+    populateCategoryDropdown(data.categories || []);
     cachedStatusValues = data.statusValues || [];
     populateStatusDropdown(cachedStatusValues);
     cachedRefMap = data.refMap || [];
@@ -244,6 +248,7 @@ async function main() {
       // Fallback: Apps Script ohne bootstrap-Action deployed
       listSuppliers().then(names => populateSupplierDropdown(names));
       listLocations().then(locs => populateLocationDropdown(locs));
+      listCategories().then(cats => populateCategoryDropdown(cats));
       listStatusValues().then(values => { cachedStatusValues = values; populateStatusDropdown(values); });
     }
   });
