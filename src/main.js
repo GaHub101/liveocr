@@ -16,6 +16,7 @@ import {
   showModeSwitcher, setActiveModeSwitch,
   showReviewControls, showCameraSwitch, showZoomControl, getZoomValue,
   showRefExistsModal, ADD_NEW_VALUE,
+  showNewValueField, isNewValueFieldActive, getNewValueFieldInput,
 } from './ui.js';
 import {
   checkRef, lookupProduct, addProduct, updateProduct, getProductSuppliers, markReorder,
@@ -454,48 +455,58 @@ async function main() {
       if (e.key === 'Enter') { e.preventDefault(); loadSuggestion(); }
     });
 
-    // "+ Neu…"-Option in Kategorie/Hauptlieferant/Lagerort: fragt einen neuen
-    // Wert ab, legt ihn im jeweiligen Sheet an und übernimmt ihn ins Dropdown –
-    // ohne den restlichen Formularinhalt zu verlieren
-    const addNewLabels = { category: 'Kategorie', supplier: 'Lieferant', location: 'Lagerort' };
-    const addNewPrompts = {
-      category: 'Neue Kategorie eingeben:',
-      supplier: 'Neuen Lieferanten eingeben:',
-      location: 'Neuen Lagerort eingeben:',
-    };
-    function wireAddNewOption(selectEl, type, addFn, populateFn) {
+    // "+ Neu…"-Option in Kategorie/Hauptlieferant/Lagerort: schaltet das
+    // Dropdown an Ort und Stelle auf ein Texteingabefeld um (kein Popup),
+    // bleibt editierbar und wird erst beim Speichern des Formulars tatsächlich
+    // im jeweiligen Sheet angelegt (resolveListField, siehe lookupConfirm unten)
+    const listFieldConfigs = [
+      { selectId: 'lk-cat', type: 'category', valsKey: 'category',      label: 'Kategorie', addFn: addCategory, populateFn: populateCategoryDropdown },
+      { selectId: 'lk-sup', type: 'supplier', valsKey: 'hauptlieferant', label: 'Lieferant', addFn: addSupplier, populateFn: populateSupplierDropdown },
+      { selectId: 'lk-loc', type: 'location', valsKey: 'location',      label: 'Lagerort',  addFn: addLocation, populateFn: populateLocationDropdown },
+    ];
+    listFieldConfigs.forEach((cfg) => {
+      const selectEl = document.getElementById(cfg.selectId);
+      const backBtn  = document.getElementById(`${cfg.selectId}-new-back`);
       let prevValue = selectEl.value;
-      selectEl.addEventListener('change', async () => {
-        if (selectEl.value !== ADD_NEW_VALUE) { prevValue = selectEl.value; return; }
-        const raw = window.prompt(addNewPrompts[type]);
-        const value = (raw || '').trim();
-        if (!value) { selectEl.value = prevValue; return; }
-
-        selectEl.disabled = true;
-        const result = await addFn(value);
-        selectEl.disabled = false;
-
-        if (result.status === 'ok' || result.status === 'already_exists') {
-          const existing = Array.from(selectEl.options)
-            .map((o) => o.value)
-            .filter((v) => v && v !== ADD_NEW_VALUE);
-          const match = existing.find((v) => v.toLowerCase() === value.toLowerCase());
-          const updated = match ? existing : [...existing, value].sort((a, b) => a.localeCompare(b));
-          const finalValue = match || value;
-          populateFn(updated);
-          selectEl.value = finalValue;
-          prevValue = finalValue;
-          persistBootstrapListValue(type, updated);
-          log.info('main', `${addNewLabels[type]} "${finalValue}" hinzugefügt`);
-        } else {
-          setStatus(result.message || `${addNewLabels[type]} konnte nicht angelegt werden`, 'error');
-          selectEl.value = prevValue;
-        }
+      selectEl.addEventListener('change', () => {
+        if (selectEl.value === ADD_NEW_VALUE) { showNewValueField(cfg.selectId, true); return; }
+        prevValue = selectEl.value;
       });
+      backBtn.addEventListener('click', () => {
+        showNewValueField(cfg.selectId, false);
+        selectEl.value = prevValue;
+      });
+    });
+
+    // Legt eine über "+ Neu…" eingetippte Kategorie/Lieferant/Lagerort im
+    // Sheet an (nur wenn das Feld gerade im Eingabe-Modus ist) und übernimmt
+    // sie ins Dropdown + den Bootstrap-Cache. Unveränderte Dropdown-Auswahl
+    // bleibt unangetastet – kein API-Call nötig.
+    async function resolveListField(cfg) {
+      if (!isNewValueFieldActive(cfg.selectId)) {
+        return { ok: true, value: document.getElementById(cfg.selectId).value.trim() };
+      }
+      const value = getNewValueFieldInput(cfg.selectId);
+      if (!value) return { ok: true, value: '' };
+
+      const result = await cfg.addFn(value);
+      if (result.status !== 'ok' && result.status !== 'already_exists') {
+        return { ok: false, message: `${cfg.label}: ${result.message || 'Konnte nicht angelegt werden'}` };
+      }
+      const selectEl = document.getElementById(cfg.selectId);
+      const existing = Array.from(selectEl.options)
+        .map((o) => o.value)
+        .filter((v) => v && v !== ADD_NEW_VALUE);
+      const match = existing.find((v) => v.toLowerCase() === value.toLowerCase());
+      const finalValue = match || value;
+      const updated = match ? existing : [...existing, value].sort((a, b) => a.localeCompare(b));
+      cfg.populateFn(updated);
+      selectEl.value = finalValue;
+      persistBootstrapListValue(cfg.type, updated);
+      showNewValueField(cfg.selectId, false);
+      log.info('main', `${cfg.label} "${finalValue}" hinzugefügt`);
+      return { ok: true, value: finalValue };
     }
-    wireAddNewOption(document.getElementById('lk-cat'), 'category', addCategory, populateCategoryDropdown);
-    wireAddNewOption(document.getElementById('lk-sup'), 'supplier', addSupplier, populateSupplierDropdown);
-    wireAddNewOption(document.getElementById('lk-loc'), 'location', addLocation, populateLocationDropdown);
 
     lookupConfirm.addEventListener('click', async () => {
       const vals = getLookupFormValues();
@@ -509,6 +520,11 @@ async function main() {
       lookupConfirm.disabled = true;
       lookupConfirm.textContent = 'Speichern…';
       try {
+        for (const cfg of listFieldConfigs) {
+          const resolved = await resolveListField(cfg);
+          if (!resolved.ok) throw new Error(resolved.message);
+          vals[cfg.valsKey] = resolved.value;
+        }
         if (isEdit) {
           await updateProduct({ id: editingProductId, ...vals });
           editingProductId = null;
