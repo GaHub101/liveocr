@@ -39,10 +39,15 @@ Camera (getUserMedia, rear-facing)
 
 Standalone mode (no ?id=):
   → main.js    – mode-selector ("Was möchten Sie tun?") with three options A / B / C
-  → A) Produkt hinzufügen   – scan → modal opens directly (REF prefilled, Hersteller + Kategorie guessed from similar REFs,
-                              Bestellstatus defaults to "vorhanden") → Hersteller/Kategorie via datalist or typed → lookupProduct() → addProduct()
+  → A) Produkt hinzufügen   – scan/typed REF → openAddForm(ref): checkRef() guards against duplicates first;
+                              on hit: "REF bereits vorhanden" dialog ("Zurück zum Scannen" abort vs. "REF bearbeiten" retry);
+                              on miss: modal opens (no auto-focus; Hersteller, Kategorie, Hauptlieferant and Lagerort
+                              guessed from similar REFs, Bestellstatus defaults to "vorhanden") → Suchbegriff/Kategorie
+                              are plain text fields (no datalist) with the guessed value pre-selected for instant overwrite,
+                              Hauptlieferant/Lagerort are closed dropdowns pre-selected only if the guess matches an option →
+                              lookupProduct() → addProduct()
   → B) Produkt suchen       – scan → checkRef() → on hit: status modal (values from Bestellstatus tab) → setStatus()
-                                                  on miss: "Neues Produkt anlegen" button (falls back to A)
+                                                  on miss: "Neues Produkt anlegen" button (falls back to A, same duplicate guard)
   → C) Nachbestellen        – scan → checkRef() → supplier links + "Nachbestellen" button → markReorder()
   → send.js    – appendLog: every scan logged to OCR_Results
 ```
@@ -57,7 +62,7 @@ Standalone mode (no ?id=):
 | `src/send.js` | `fetch()` without `Content-Type` header (simple request, no CORS preflight). Offline queue in `localStorage` (`ocr_send_queue`), auto-flush on `online` event |
 | `src/prices.js` | `checkRef`, `lookupProduct`, `addProduct`, `getProductSuppliers`, `markReorder`, `bootstrap`, `listSuppliers`, `listStatusValues`, `setOrderStatus` – all POST to Apps Script. `bootstrap` fetches all dropdown data plus Hersteller and Kategorie lists and REF→[Hersteller, Kategorie, Hauptlieferant, Lagerort] tuples in one request; cached in `localStorage` (`ocr_bootstrap_cache`) for instant startup. The REF tuples drive the Hersteller, Kategorie, Hauptlieferant and Lagerort preselection (longest common prefix, no API call). `checkRef` also powers the duplicate-REF guard before the "Produkt hinzufügen" form opens |
 | `src/logger.js` | Ring-buffer log, max. 300 entries, `localStorage`. Debug overlay via `?debug` URL param |
-| `src/ui.js` | DOM updates: status, result, banner, queue badge, supplier links, lookup modal, mode-selector, status modal, supplier dropdown |
+| `src/ui.js` | DOM updates: status (colour-only dot, no text for `working`/`ready`), result, banner, queue badge, supplier links, lookup modal, mode-selector, status modal, supplier/location dropdowns, `showRefExistsModal` (duplicate-REF dialog) |
 | `src/main.js` | Entry point. URL params: `?id=` (write+reorder), `?name=` (banner), `?debug`. Standalone shows mode-selector first; selected mode (`add`/`search`/`reorder`) branches the post-scan flow. |
 | `apps-script/Code.gs` | Google Apps Script webhook. Actions: `ocr`, `checkRef`/`search`, `lookupProduct`, `bootstrap`, `addProduct`, `getProductSuppliers`, `markReorder`, `listSuppliers`, `listStatusValues`, `setStatus`, `writeRef` (id present), `appendLog` (standalone) |
 
@@ -114,6 +119,8 @@ Populate column A of `Bestellungen` with `=ROW()-1` from A2 downwards. IDs must 
 - **No `Content-Type: application/json` header on POST.** Keeps the request a "simple request", avoiding a CORS preflight that Apps Script cannot answer. Apps Script reads the body via `JSON.parse(e.postData.contents)`.
 - **No `focusMode` `applyConstraints` calls.** Explicit focus-mode (and `focusDistance`/`pointsOfInterest`) constraints interfere with Samsung's native AF stack. The Galaxy S24 focuses natively without intervention. The **only** allowed `applyConstraints` use is **`zoom`** (`camera.js`): it is not a focus constraint, does not reactivate the S24 AF regression, and lets the user scan from a focusable distance instead of crossing the minimum focus distance. Camera lens selection is done via `enumerateDevices()` + `deviceId` (auto heuristic for an ultrawide/near lens, with a manual switcher and main-camera fallback).
 - **Shared secret on every request.** `VITE_WEBHOOK_SECRET` is embedded in the built JS and sent as `secret` in every POST body. Apps Script verifies it against `WEBHOOK_SECRET` in Script Properties. Deters automated abuse; not cryptographically strong (secret is visible in built JS).
+- **`captureSharpest` (`camera.js`) samples 3 frames over 240 ms**, keeping the sharpest (anti-blur safety net against the S24 AF-pumping regression, see `ISSUE.md`). No `takePhoto()` fallback — it was already documented as unreliable for sharpness and was the slowest step. The review screen ("Senden"/"Neu aufnehmen") remains the second safety net before a frame is ever sent to OCR.
+- **Status dot instead of status text while scanning/ready.** `working` (orange, pulsing) and the post-recognition `ready` state show only the coloured dot (`#status-dot`), no `#status-text` — reduces UI noise during the scan loop. Error/offline states keep their text (`error` = red with message, `offline` = orange solid).
 
 ### Debugging
 
