@@ -313,12 +313,18 @@ export function setActiveModeSwitch(mode) {
   });
 }
 
+// Sentinel-Wert der jeweils letzten Dropdown-Option "+ Neu…" (Kategorie,
+// Hauptlieferant, Lagerort) – main.js fängt die Auswahl dieses Werts ab und
+// startet den Anlege-Dialog, statt ihn als echten Feldwert zu übernehmen.
+export const ADD_NEW_VALUE = '__add_new__';
+
 export function populateLocationDropdown(locations) {
   const sel = document.getElementById('lk-loc');
   if (!sel) return;
   const current = sel.value;
   sel.innerHTML = '<option value="">– bitte wählen –</option>'
-    + locations.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+    + locations.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')
+    + `<option value="${ADD_NEW_VALUE}">+ Neuer Lagerort…</option>`;
   if (current && locations.includes(current)) sel.value = current;
 }
 
@@ -327,7 +333,8 @@ export function populateCategoryDropdown(categories) {
   if (!sel) return;
   const current = sel.value;
   sel.innerHTML = '<option value="">– bitte wählen –</option>'
-    + categories.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+    + categories.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')
+    + `<option value="${ADD_NEW_VALUE}">+ Neue Kategorie…</option>`;
   if (current && categories.includes(current)) sel.value = current;
 }
 
@@ -337,7 +344,8 @@ export function populateSupplierDropdown(suppliers) {
   if (!sel) return;
   const current = sel.value;
   sel.innerHTML = '<option value="">– bitte wählen –</option>'
-    + suppliers.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+    + suppliers.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')
+    + `<option value="${ADD_NEW_VALUE}">+ Neuer Lieferant…</option>`;
   if (current && suppliers.includes(current)) sel.value = current;
 }
 

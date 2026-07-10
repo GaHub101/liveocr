@@ -29,6 +29,15 @@ var SUPPLIERS_SHEET          = 'Lieferanten';
 var STATUS_SHEET             = 'Bestellstatus';
 var LAGERORT_SHEET           = 'Lagerort';
 var CATEGORY_SHEET           = 'Kategorie';
+
+// Erlaubte Ziel-Sheets für addListValue (Client-Typ → Sheet-Name); jeweils
+// Spalte A. Bei "supplier" bleibt Spalte B (Such-URL) leer, bis sie manuell
+// im Lieferanten-Tab nachgetragen wird – bis dahin erscheint kein Bestell-Link.
+var ADD_LIST_SHEETS = {
+  category: CATEGORY_SHEET,
+  location: LAGERORT_SHEET,
+  supplier: SUPPLIERS_SHEET
+};
 var REF_COL                  = 6;   // Spalte F (1-based)
 var STATUS_COL               = 9;   // Spalte I, Bestellstatus (1-based)
 var ID_COL_INDEX             = 0;   // Spalte A (0-based)
@@ -124,6 +133,10 @@ function doPost(e) {
 
     if (payload.action === 'listCategories') {
       return handleListCategories();
+    }
+
+    if (payload.action === 'addListValue') {
+      return handleAddListValue(payload);
     }
 
     if (payload.action === 'setStatus') {
@@ -921,6 +934,56 @@ function handleListCategories() {
   }
   logUsage('listCategories', 'ok', 'count=' + categories.length);
   return jsonResponse({ status: 'ok', categories: categories });
+}
+
+// ---------------------------------------------------------------------------
+// Neuen Wert in Kategorie-/Lagerort-/Lieferanten-Sheet anlegen (Dropdown-
+// Erweiterung "+ Neu…" in Kategorie, Hauptlieferant und Lagerort)
+// ---------------------------------------------------------------------------
+
+function handleAddListValue(payload) {
+  var type      = String(payload.type  || '').trim();
+  var sheetName = ADD_LIST_SHEETS[type];
+  if (!sheetName) {
+    return jsonResponse({ status: 'error', message: 'Ungültiger Listentyp' });
+  }
+
+  var value = String(payload.value || '').trim();
+  if (!value || value.length > 100) {
+    return jsonResponse({ status: 'error', message: 'Ungültiger Wert (1–100 Zeichen erforderlich)' });
+  }
+
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    return jsonResponse({ status: 'error', message: 'Sheet "' + sheetName + '" nicht gefunden' });
+  }
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (lockErr) {
+    return jsonResponse({ status: 'error', message: 'Server überlastet – bitte erneut versuchen' });
+  }
+
+  try {
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      var existing = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < existing.length; i++) {
+        var v = String(existing[i][0] || '').trim();
+        if (v && v.toLowerCase() === value.toLowerCase()) {
+          logUsage('addListValue', 'already_exists', 'type=' + type + ' value=' + value);
+          return jsonResponse({ status: 'already_exists', value: v });
+        }
+      }
+    }
+
+    sheet.appendRow([value]);
+    Logger.log('addListValue: type=' + type + ' value=' + value);
+    logUsage('addListValue', 'ok', 'type=' + type + ' value=' + value);
+    return jsonResponse({ status: 'ok', value: value });
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ---------------------------------------------------------------------------
