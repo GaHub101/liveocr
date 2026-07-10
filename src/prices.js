@@ -49,13 +49,13 @@ export async function bootstrap() {
   try {
     const data = await post({ action: 'bootstrap' });
     if (data.status !== 'ok') return null;
-    log.info('prices', `bootstrap: ${data.suppliers?.length ?? 0} Lieferanten, ${data.locations?.length ?? 0} Lagerorte, ${data.statusValues?.length ?? 0} Statuswerte, ${data.hersteller?.length ?? 0} Hersteller, ${data.kategorien?.length ?? 0} Kategorien, ${data.refMap?.length ?? 0} REF-Einträge`);
+    log.info('prices', `bootstrap: ${data.suppliers?.length ?? 0} Lieferanten, ${data.locations?.length ?? 0} Lagerorte, ${data.statusValues?.length ?? 0} Statuswerte, ${data.hersteller?.length ?? 0} Hersteller, ${data.categories?.length ?? 0} Kategorien, ${data.refMap?.length ?? 0} REF-Einträge`);
     return {
       suppliers:    data.suppliers    || [],
       locations:    data.locations    || [],
       statusValues: data.statusValues || [],
       hersteller:   data.hersteller   || [],
-      kategorien:   data.kategorien   || [],
+      categories:   data.categories   || [],
       refMap:       data.refMap       || [],
     };
   } catch (err) {
@@ -112,6 +112,18 @@ export async function listLocations() {
     return locs;
   } catch (err) {
     log.warn('prices', `listLocations fehlgeschlagen: ${err.message}`);
+    return [];
+  }
+}
+
+export async function listCategories() {
+  try {
+    const data = await post({ action: 'listCategories' });
+    const cats = data.categories || [];
+    log.info('prices', `listCategories: ${cats.length} Kategorien`);
+    return cats;
+  } catch (err) {
+    log.warn('prices', `listCategories fehlgeschlagen: ${err.message}`);
     return [];
   }
 }

@@ -322,6 +322,15 @@ export function populateLocationDropdown(locations) {
   if (current && locations.includes(current)) sel.value = current;
 }
 
+export function populateCategoryDropdown(categories) {
+  const sel = document.getElementById('lk-cat');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">– bitte wählen –</option>'
+    + categories.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  if (current && categories.includes(current)) sel.value = current;
+}
+
 // Hauptlieferant-Dropdown im "Neues Produkt"-Modal mit Lieferantennamen befüllen
 export function populateSupplierDropdown(suppliers) {
   const sel = document.getElementById('lk-sup');
