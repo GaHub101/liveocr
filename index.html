@@ -211,7 +211,7 @@
     }
 
     #scan-btn, #send-btn, #lookup-btn, #search-confirm-btn,
-    #review-send-btn, #review-retake-btn {
+    #review-send-btn, #review-retake-btn, #manual-add-btn {
       width: 100%;
       padding: 16px;
       color: #fff;
@@ -228,6 +228,12 @@
     #review-retake-btn { background: #475569; margin-bottom: 4px; }
     #lookup-btn       { background: #3b82f6; }
     #search-confirm-btn { background: #15803d; margin-bottom: 4px; }
+    #manual-add-btn {
+      background: transparent;
+      border: 1px solid #475569;
+      color: #cbd5e1;
+      margin-bottom: 4px;
+    }
 
     #search-ref-input {
       width: 100%;
@@ -859,6 +865,7 @@
     <button id="send-btn" disabled>REF-Nr. hinzufügen</button>
     <button id="reorder-btn" style="display:none">Nachbestellen</button>
     <button id="search-confirm-btn" style="display:none">Suchen</button>
+    <button id="manual-add-btn" style="display:none">Manuell eintragen (ohne Scan)</button>
     <button id="lookup-btn" style="display:none">Neues Produkt anlegen</button>
     <div id="queue-info"></div>
     <div id="avail-panel" style="display:none">
