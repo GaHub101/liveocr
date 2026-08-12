@@ -53,6 +53,13 @@ var ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 // REF-Format: 1–50 Zeichen, nur Buchstaben/Ziffern/Bindestriche/Schrägstriche/Punkte
 var REF_PATTERN = /^[A-Za-z0-9\-\/\.]{1,50}$/;
 
+// [FIX] Leerzeichen in REF-Nummern (z.B. "123 456 789" statt "123456789")
+// sind auf Etiketten rein optisch – vor der Prüfung/Speicherung entfernen,
+// statt sie als ungültig abzulehnen.
+function normalizeRef(value) {
+  return String(value || '').trim().replace(/\s+/g, '');
+}
+
 // ---------------------------------------------------------------------------
 // HTTP-Endpunkte
 // ---------------------------------------------------------------------------
@@ -205,7 +212,7 @@ function logUsage(action, status, details) {
 
 function writeRef(payload) {
   // [FIX] REF-Format validieren
-  var rawRef = String(payload.ref || '').trim();
+  var rawRef = normalizeRef(payload.ref);
   if (rawRef === '') {
     Logger.log('writeRef: ref fehlt oder leer für id=' + payload.id);
     logUsage('writeRef', 'error', 'ref fehlt – id=' + payload.id);
@@ -281,7 +288,7 @@ function writeRef(payload) {
 
 function appendLog(payload) {
   // [FIX] REF-Format validieren
-  var rawRef = String(payload.ref || '').trim();
+  var rawRef = normalizeRef(payload.ref);
   if (rawRef === '') {
     Logger.log('appendLog: ref fehlt – Eintrag abgelehnt');
     logUsage('appendLog', 'error', 'ref fehlt oder leer – kein Eintrag');
@@ -320,7 +327,8 @@ function appendLog(payload) {
 // ---------------------------------------------------------------------------
 
 function searchByRef(ref) {
-  if (!ref || !REF_PATTERN.test(String(ref).trim())) {
+  var normalizedRef = normalizeRef(ref);
+  if (!normalizedRef || !REF_PATTERN.test(normalizedRef)) {
     return jsonResponse({ status: 'error', message: 'Ungültige oder fehlende REF' });
   }
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(BESTELLUNGEN_SHEET);
@@ -328,7 +336,7 @@ function searchByRef(ref) {
 
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][REF_COL - 1]).trim() === String(ref).trim()) {
+    if (String(data[i][REF_COL - 1]).trim() === normalizedRef) {
       var row = data[i];
       return jsonResponse({
         status:         'ok',
@@ -447,14 +455,17 @@ function handleGeminiOcr(base64Image, mimeType) {
   if (jsonMatch) {
     try {
       var parsed = JSON.parse(jsonMatch[0]);
-      ref = String(parsed.ref || '').trim();
+      ref = normalizeRef(parsed.ref);
     } catch (parseErr) {
       Logger.log('handleGeminiOcr: JSON-Parse fehlgeschlagen, raw="' + raw + '"');
     }
   }
   // Fallback: rohe Antwort als REF interpretieren (alte Antwortform / falls Modell JSON-Format ignoriert)
-  if (!ref && raw && raw !== 'NONE' && REF_PATTERN.test(raw)) {
-    ref = raw;
+  if (!ref && raw && raw !== 'NONE') {
+    var normalizedRaw = normalizeRef(raw);
+    if (REF_PATTERN.test(normalizedRaw)) {
+      ref = normalizedRaw;
+    }
   }
 
   Logger.log('handleGeminiOcr: raw="' + raw + '" ref=' + (ref || '(leer)'));
@@ -655,7 +666,7 @@ function handleBootstrap() {
 // ---------------------------------------------------------------------------
 
 function handleAddProduct(payload) {
-  var ref = String(payload.ref || '').trim();
+  var ref = normalizeRef(payload.ref);
   if (!ref || !REF_PATTERN.test(ref)) {
     return jsonResponse({ status: 'error', message: 'Ungültige REF' });
   }
@@ -715,7 +726,7 @@ function handleUpdateProduct(payload) {
   var id = String(payload.id || '').trim();
   if (!id) return jsonResponse({ status: 'error', message: 'id fehlt' });
 
-  var ref = String(payload.ref || '').trim();
+  var ref = normalizeRef(payload.ref);
   if (!ref || !REF_PATTERN.test(ref)) {
     return jsonResponse({ status: 'error', message: 'Ungültige REF' });
   }
