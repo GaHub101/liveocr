@@ -334,6 +334,11 @@ export function showSearchRefInput(show, prefillText = '', btnLabel = 'Suchen') 
   if (resBox) resBox.style.display = show ? 'none' : '';
 }
 
+export function showManualAddButton(visible) {
+  const btn = document.getElementById('manual-add-btn');
+  if (btn) btn.style.display = visible ? 'block' : 'none';
+}
+
 // Mode-Switcher (Wishlist Pkt. 4) – sichtbar in den drei Standalone-Modi
 export function showModeSwitcher(visible) {
   const sw = document.getElementById('mode-switcher');

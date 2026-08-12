@@ -15,7 +15,7 @@ import {
   showStatusModal, getStatusModalValue, setStatusModalState,
   showModeSwitcher, setActiveModeSwitch,
   showReviewControls, showCameraSwitch, showZoomControl, getZoomValue,
-  showRefExistsModal, ADD_NEW_VALUE,
+  showRefExistsModal, ADD_NEW_VALUE, showManualAddButton,
   showNewValueField, isNewValueFieldActive, getNewValueFieldInput,
 } from './ui.js';
 import {
@@ -39,6 +39,7 @@ const statusCancel   = document.getElementById('status-cancel-btn');
 const modeAddBtn     = document.getElementById('mode-add');
 const modeSearchBtn  = document.getElementById('mode-search');
 const modeReorderBtn = document.getElementById('mode-reorder');
+const manualAddBtn   = document.getElementById('manual-add-btn');
 
 // URL-Parameter auslesen
 const params      = new URLSearchParams(location.search);
@@ -163,10 +164,23 @@ async function openAddForm(ref) {
     return;
   }
   showSearchRefInput(false);
+  showManualAddButton(false);
   showLookupButton(false);
   suggestRequestId++;
   setLookupModal('form', ref, null);
   prefillGuesses(ref);
+}
+
+// "Manuell eintragen": Formular ohne Scan/REF-Prüfung direkt öffnen – kein
+// Netzwerk-Roundtrip nötig, da es noch keine REF gibt, gegen die geprüft werden könnte
+function openBlankAddForm() {
+  editingProductId = null;
+  log.info('main', 'Manuelle Eingabe – Formular ohne Scan geöffnet');
+  showSearchRefInput(false);
+  showManualAddButton(false);
+  showLookupButton(false);
+  suggestRequestId++;
+  setLookupModal('form', '', null);
 }
 
 // Formular zum Prüfen/Ändern eines bestehenden Produkts öffnen (Duplikat-Dialog
@@ -174,6 +188,7 @@ async function openAddForm(ref) {
 function openEditForm(ref, existing) {
   editingProductId = existing.id;
   showSearchRefInput(false);
+  showManualAddButton(false);
   showLookupButton(false);
   suggestRequestId++;
   setLookupModal('form', ref, null, 'edit');
@@ -346,6 +361,7 @@ async function main() {
 
     function resetToEditField() {
       showSearchRefInput(true, '', modeBtnLabels[userMode] || 'Weiter');
+      showManualAddButton(userMode === 'add');
     }
 
     searchConfirmBtn.addEventListener('click', async () => {
@@ -418,9 +434,14 @@ async function main() {
     refExistsEditBtn.addEventListener('click', () => {
       showRefExistsModal(false);
       showSearchRefInput(true, duplicateRef, modeBtnLabels[userMode] || 'Weiter');
+      showManualAddButton(userMode === 'add');
       // Verzögert fokussieren – direkt nach display:none→block greift der
       // Fokus auf manchen Mobilbrowsern nicht zuverlässig
       setTimeout(() => searchRefInput.focus(), 0);
+    });
+
+    manualAddBtn.addEventListener('click', () => {
+      openBlankAddForm();
     });
     refExistsCheckBtn.addEventListener('click', () => {
       showRefExistsModal(false);
@@ -510,6 +531,7 @@ async function main() {
 
     lookupConfirm.addEventListener('click', async () => {
       const vals = getLookupFormValues();
+      if (!vals.ref)  { document.getElementById('lk-ref').focus();  return; }
       if (!vals.name) { document.getElementById('lk-name').focus(); return; }
       // Herstellername aus Artikelname entfernen (Sicherheitsnetz falls manuell eingefügt)
       if (vals.hersteller) {
@@ -724,6 +746,7 @@ function selectMode(mode) {
   showModeSwitcher(true);
   setActiveModeSwitch(mode);
   showSearchRefInput(true, '', modeBtnLabels[mode] || 'Weiter');
+  showManualAddButton(mode === 'add');
   setStatus(`Modus: ${modeLabel(mode)} – scannen oder REF eingeben`, 'ready');
 }
 
@@ -746,6 +769,7 @@ function switchMode(mode) {
   const inp = document.getElementById('search-ref-input');
   const currentRef = inp ? inp.value : '';
   showSearchRefInput(true, currentRef, modeBtnLabels[mode] || 'Weiter');
+  showManualAddButton(mode === 'add');
   setStatus(`Modus: ${modeLabel(mode)}`, 'ready');
 }
 
