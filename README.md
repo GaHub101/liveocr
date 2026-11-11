@@ -130,6 +130,8 @@ Browser (Android Chrome)
       ├── src/canvas.js   – Crop: Scan-Rahmen (80 % × 60 %, zentriert) + 20 px weißer Rand
       │                     Farbbild direkt an Gemini – kein Graustufen-/Binarisierungs-Schritt
       ├── src/ocr.js      – Gemini 3.1 Flash-Lite via Apps Script Webhook; Frame als base64-JPEG
+      │                     (volle Auflösung, max. 1568 px lange Kante)
+      ├── src/refmatch.js – Abgleich der gelesenen REF mit bekannten REFs („Meinten Sie …?")
       ├── src/send.js     – fetch() + localStorage Offline-Queue (OCR_Results / writeRef)
       ├── src/prices.js   – checkRef, lookupProduct, addProduct, getProductSuppliers,
       │                     markReorder, listSuppliers, listStatusValues, setOrderStatus

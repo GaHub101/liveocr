@@ -17,6 +17,20 @@
 
 ---
 
+### OCR-Bild zu klein – Lesefehler bei kleiner Etikettenschrift
+**Status:** behoben
+**Symptom:** Einzelne Zeichen der REF falsch gelesen (0/O, 1/I, 8/B) oder LOT statt REF, vor allem bei kleiner Schrift.
+**Ursache:** Die Kamera lief mit 1280×720; die Scan-Zone (ca. 808×472 px) wurde in `ocr.js` vor dem Senden pauschal halbiert. Beim Modell kamen nur rund 424×256 px an.
+**Fix:**
+1. Kamera fordert 1920×1080 an (`ideal`, auch beim Objektivwechsel) – kein Fokus-Constraint, die S24-AF-Regel bleibt unberührt.
+2. Kein pauschales Halbieren mehr: verkleinert wird nur, wenn die lange Kante 1568 px übersteigt; JPEG-Qualität 0.7 → 0.85. OCR-Input jetzt ca. 1192×688 px (rund 7,5× mehr Pixel).
+3. Lokaler Abgleich mit den bekannten REFs (`src/refmatch.js`): exakter Treffer wird bestätigt, ein Fast-Treffer als „Meinten Sie …?" angeboten (Such-/Nachbestell-Modus).
+4. Messbar gemacht: `npm run eval:ocr` wertet ein Testset echter Etikettenfotos aus (`testset/README.md`).
+
+**Nebenwirkung:** Der Upload pro Scan ist grösser (grob 150–300 KB statt ~30 KB). Falls das im Praxis-WLAN spürbar bremst, `MAX_EDGE`/`JPEG_QUALITY` in `ocr.js` senken und mit dem Testset gegenprüfen.
+
+---
+
 ### Unscharfe Nahaufnahme auf Samsung S24
 **Status:** behoben (Iterationen 1–3)
 **Symptom:** Bei Nahaufnahme verschwommenes Bild, am Tablet ok. Auto-Senden ohne Kontrolle.

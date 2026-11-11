@@ -88,8 +88,15 @@ async function applyZoom(track, zoomCaps, value) {
   }
 }
 
+// Full HD statt 720p: die Scan-Zone ist nur ein Ausschnitt (80 % × 60 %) des
+// Bildes – bei 1280×720 blieben für kleine Etikettenschrift zu wenig Pixel.
+// `ideal` ist nur ein Wunsch: Kameras ohne 1080p liefern ihre nächstbeste
+// Auflösung, es gibt keinen OverconstrainedError. Kein Fokus-Constraint
+// (siehe CLAUDE.md „Key design constraints").
+const IDEAL_RES = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+
 async function openStream(videoConstraint) {
-  return navigator.mediaDevices.getUserMedia({ video: videoConstraint, audio: false });
+  return navigator.mediaDevices.getUserMedia({ video: { ...IDEAL_RES, ...videoConstraint }, audio: false });
 }
 
 export async function startCamera(videoEl) {
@@ -97,8 +104,6 @@ export async function startCamera(videoEl) {
   // liefert enumerateDevices() Labels.
   let stream = await openStream({
     facingMode: { ideal: 'environment' },
-    width:  { ideal: 1280 },
-    height: { ideal: 720 },
   });
   let track = stream.getVideoTracks()[0];
   const mainDeviceId = track?.getSettings?.().deviceId || '';

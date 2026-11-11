@@ -334,6 +334,31 @@ export function showSearchRefInput(show, prefillText = '', btnLabel = 'Suchen') 
   if (resBox) resBox.style.display = show ? 'none' : '';
 }
 
+// Ergebnis des lokalen REF-Abgleichs (refmatch.js) unter dem REF-Feld:
+// exakter Treffer → grüner Hinweis; ähnliche bekannte REFs → antippbare
+// "Meinten Sie …?"-Vorschläge; sonst ausgeblendet.
+export function showRefSuggestion(match, onPick) {
+  const box = document.getElementById('ref-suggest');
+  if (!box) return;
+  box.textContent = '';
+  box.classList.remove('confirmed');
+  if (!match || match.type === 'none') { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  if (match.type === 'exact') {
+    box.classList.add('confirmed');
+    box.textContent = '✓ REF ist im Sheet bekannt';
+    return;
+  }
+  box.append('Nicht im Sheet – meinten Sie: ');
+  for (const cand of match.candidates) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = cand;
+    btn.addEventListener('click', () => onPick?.(cand));
+    box.append(btn);
+  }
+}
+
 export function showManualAddButton(visible) {
   const btn = document.getElementById('manual-add-btn');
   if (btn) btn.style.display = visible ? 'block' : 'none';

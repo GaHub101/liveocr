@@ -235,6 +235,14 @@
       margin-bottom: 4px;
     }
 
+    #ref-suggest { margin-top: 6px; font-size: 0.85rem; color: #fbbf24; }
+    #ref-suggest button {
+      display: inline-block; width: auto; margin: 4px 6px 0 0; padding: 6px 12px;
+      background: #1e293b; border: 1px solid #fbbf24; border-radius: 999px;
+      color: #fde68a; font-size: 1rem; font-weight: 700; letter-spacing: 0.05em;
+    }
+    #ref-suggest.confirmed { color: #4ade80; }
+
     #search-ref-input {
       width: 100%;
       box-sizing: border-box;
@@ -854,6 +862,7 @@
       <div id="result-text">–</div>
     </div>
     <input id="search-ref-input" type="text" style="display:none" placeholder="REF prüfen/korrigieren">
+    <div id="ref-suggest" style="display:none"></div>
     <div id="confidence-bar-wrap">
       <div id="confidence-bar"></div>
     </div>
