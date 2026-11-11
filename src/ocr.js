@@ -3,6 +3,11 @@ import { log } from './logger.js';
 const WEBHOOK_URL = import.meta.env.VITE_APPS_SCRIPT_URL || '';
 const WEBHOOK_SECRET = import.meta.env.VITE_WEBHOOK_SECRET || '';
 
+// OCR-Bildgrösse: lange Kante max. 1568 px, JPEG q0.85. Bei Full-HD-Kamera
+// ergibt die Scan-Zone ca. 1192×688 px und wird unverändert gesendet.
+const MAX_EDGE     = 1568;
+const JPEG_QUALITY = 0.85;
+
 let busy = false;
 
 export async function initOCR() {
@@ -38,12 +43,20 @@ export async function scheduleRecognition(canvas, onResult) {
     }
 
     const t0 = performance.now();
-    const scale = 0.5;
-    const offscreen = document.createElement('canvas');
-    offscreen.width  = Math.round(canvas.width  * scale);
-    offscreen.height = Math.round(canvas.height * scale);
-    offscreen.getContext('2d').drawImage(canvas, 0, 0, offscreen.width, offscreen.height);
-    const base64 = offscreen.toDataURL('image/jpeg', 0.7).split(',')[1];
+    // Nur verkleinern, wenn die lange Kante MAX_EDGE übersteigt – nie pauschal
+    // halbieren: kleine Etikettenschrift braucht die Pixel (siehe ISSUE.md).
+    const scale = Math.min(1, MAX_EDGE / Math.max(canvas.width, canvas.height));
+    let source = canvas;
+    if (scale < 1) {
+      source = document.createElement('canvas');
+      source.width  = Math.round(canvas.width  * scale);
+      source.height = Math.round(canvas.height * scale);
+      const ctx = source.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(canvas, 0, 0, source.width, source.height);
+    }
+    const offscreen = source;
+    const base64 = source.toDataURL('image/jpeg', JPEG_QUALITY).split(',')[1];
     const encMs = Math.round(performance.now() - t0);
     log.info('ocr', `Bild kodiert: ${Math.round(base64.length / 1024)}KB, ${offscreen.width}×${offscreen.height}px (${encMs}ms)`);
 

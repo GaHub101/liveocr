@@ -17,7 +17,9 @@ import {
   showReviewControls, showCameraSwitch, showZoomControl, getZoomValue,
   showRefExistsModal, ADD_NEW_VALUE, showManualAddButton,
   showNewValueField, isNewValueFieldActive, getNewValueFieldInput,
+  showRefSuggestion,
 } from './ui.js';
+import { matchRef } from './refmatch.js';
 import {
   checkRef, lookupProduct, addProduct, updateProduct, getProductSuppliers, markReorder,
   bootstrap, listSuppliers, listLocations, listCategories, listStatusValues, setOrderStatus,
@@ -200,12 +202,30 @@ async function handleAddMode(text) {
   await openAddForm(text);
 }
 
+// Gelesene/getippte REF lokal gegen die bekannten REFs (bootstrap-Cache)
+// prüfen – kein API-Call. Exakt → Bestätigung; fast gleich (0/O, 1/I, ein
+// Zeichen daneben) → antippbarer "Meinten Sie …?"-Vorschlag, der das Feld
+// überschreibt. Nur Such-/Nachbestell-Modus: dort ist die REF in aller Regel
+// schon im Sheet, ein Fast-Treffer also sehr wahrscheinlich ein Lesefehler.
+function updateRefSuggestion(ref) {
+  if (userMode !== 'search' && userMode !== 'reorder') { showRefSuggestion(null); return; }
+  const match = matchRef(ref, cachedRefMap.map((e) => e[0]));
+  if (match.type === 'near') log.info('main', `REF-Abgleich: "${ref}" nicht bekannt, ähnlich: ${match.candidates.join(', ')}`);
+  showRefSuggestion(match, (picked) => {
+    log.info('main', `REF-Vorschlag übernommen: "${ref}" → "${picked}"`);
+    document.getElementById('search-ref-input').value = picked;
+    updateRefSuggestion(picked);
+  });
+}
+
 async function handleSearchMode(text) {
   document.getElementById('search-ref-input').value = text;
+  updateRefSuggestion(text);
 }
 
 async function handleReorderMode(text) {
   document.getElementById('search-ref-input').value = text;
+  updateRefSuggestion(text);
 }
 
 
@@ -362,11 +382,16 @@ async function main() {
     function resetToEditField() {
       showSearchRefInput(true, '', modeBtnLabels[userMode] || 'Weiter');
       showManualAddButton(userMode === 'add');
+      showRefSuggestion(null);
     }
+
+    // Vorschlag live nachführen, wenn die REF von Hand korrigiert wird
+    searchRefInput.addEventListener('input', () => updateRefSuggestion(searchRefInput.value.trim()));
 
     searchConfirmBtn.addEventListener('click', async () => {
       const ref = searchRefInput.value.trim();
       if (!ref) return;
+      showRefSuggestion(null);
 
       if (userMode === 'add') {
         await openAddForm(ref);
@@ -649,6 +674,7 @@ async function main() {
     reviewSendBtn.textContent = 'Sende…';
     setStatus('', 'working');  // nur der pulsierende orange Punkt während der OCR
     // Panels zurücksetzen vor neuem Scan
+    showRefSuggestion(null);
     showSupplierLinks([], '');
     showLookupButton(false);
     showReorderButton(false);
@@ -770,6 +796,7 @@ function switchMode(mode) {
   const currentRef = inp ? inp.value : '';
   showSearchRefInput(true, currentRef, modeBtnLabels[mode] || 'Weiter');
   showManualAddButton(mode === 'add');
+  updateRefSuggestion(currentRef.trim());
   setStatus(`Modus: ${modeLabel(mode)}`, 'ready');
 }
 

@@ -2,6 +2,11 @@
 
 ## Offen
 
+### Testset füllen
+30–50 Etikettenfotos mit bekannter REF nach `testset/images/` legen und in `testset/labels.csv` eintragen (siehe `testset/README.md`). Ohne Fotos misst `npm run eval:ocr` nichts.
+
+---
+
 ### Barcode / QR-Code-Unterstützung
 Die App erkennt gedruckten Text per OCR (Gemini). Barcodes und QR-Codes werden nicht unterstützt. Eine Erweiterung wäre mit der [BarcodeDetector Web API](https://developer.mozilla.org/en-US/docs/Web/API/BarcodeDetector) möglich (Android Chrome unterstützt sie).
 
@@ -16,6 +21,7 @@ Der Webhook ist durch ein Shared Secret geschützt, hat aber kein serverseitiges
 
 ## Erledigt
 
+- [x] OCR-Genauigkeit: Full-HD-Kamera, kein 50-%-Downscale mehr, lokaler REF-Abgleich mit „Meinten Sie …?", Unit-Tests (`npm test`) und Testset-Auswertung (`npm run eval:ocr`) – Details siehe `ISSUE.md`.
 - [x] Tesseract durch Gemini 2.5 Flash ersetzt
 - [x] Gemini-Payload optimiert (50 % Downscale, JPEG q0.7, ~−75 % Größe)
 - [x] Prompt serverseitig hardkodiert (nicht mehr vom Client gesendet)

@@ -9,9 +9,11 @@ npm install      # install dependencies
 npm run dev      # dev server at localhost (camera works without HTTPS on localhost)
 npm run build    # Vite build → dist/
 npm run preview  # preview the production build locally
+npm test         # unit tests (node:test, no extra dependency) – test/*.test.js
+npm run eval:ocr # OCR accuracy/latency against testset/ (see testset/README.md)
 ```
 
-There is no test suite.
+Unit tests cover the pure logic only (`src/refmatch.js`). Camera/DOM code has no tests.
 
 ## Environment setup
 
@@ -63,9 +65,10 @@ Standalone mode (no ?id=):
 
 | File | Purpose |
 |---|---|
-| `src/camera.js` | `getUserMedia`, rear camera (`facingMode: environment`) |
+| `src/camera.js` | `getUserMedia`, rear camera (`facingMode: environment`), requests 1920×1080 (`ideal`, falls back silently) on every stream open incl. lens switch |
 | `src/canvas.js` | Crop to scan zone (80%×60%, centred) + 20 px white padding. Sends colour image directly to Gemini – no grayscale or binarisation. |
-| `src/ocr.js` | Gemini 3.1 Flash-Lite via Apps Script webhook. Canvas frame → downscaled 50 % → JPEG (q0.7) → base64 → POST. Prompt is hardcoded server-side. |
+| `src/ocr.js` | Gemini 3.1 Flash-Lite via Apps Script webhook. Canvas frame → JPEG (q0.85) → base64 → POST; only downscaled if the long edge exceeds 1568 px (never a blanket 50 %). Prompt is hardcoded server-side. |
+| `src/refmatch.js` | Pure functions: `matchRef(ref, knownRefs)` compares a scanned/typed REF with the REFs from the bootstrap cache → `exact` / `near` (confusable characters 0/O, 1/I/L, 8/B, 5/S, 2/Z, missing separators, or one character off for REFs ≥ 5 chars) / `none`. Drives the "✓ bekannt" hint and the tappable "Meinten Sie …?" suggestions (`showRefSuggestion` in `ui.js`) in search/reorder mode – no API call. |
 | `src/send.js` | `fetch()` without `Content-Type` header (simple request, no CORS preflight). Offline queue in `localStorage` (`ocr_send_queue`), auto-flush on `online` event |
 | `src/prices.js` | `checkRef`, `lookupProduct`, `addProduct`, `updateProduct`, `getProductSuppliers`, `markReorder`, `bootstrap`, `listSuppliers`, `listLocations`, `listCategories`, `addCategory`, `addLocation`, `addSupplier`, `listStatusValues`, `setOrderStatus` – all POST to Apps Script. `bootstrap` fetches all dropdown data (Lieferanten, Lagerort, Kategorie, Bestellstatus) plus the Hersteller list and REF→[Hersteller, Kategorie, Hauptlieferant, Lagerort] tuples in one request; cached in `localStorage` (`ocr_bootstrap_cache`) for instant startup. The REF tuples drive the Hersteller, Kategorie, Hauptlieferant and Lagerort preselection (longest common prefix, no API call) — Kategorie/Hauptlieferant/Lagerort are closed dropdowns sourced from their own sheets, so the guess is only applied if it matches an existing option. `addCategory`/`addLocation`/`addSupplier` (thin wrappers around `addListValue`) append a new row to the respective sheet (Kategorie/Lagerort/Lieferanten, column A only – a new supplier's Such-URL in column B must still be added manually) and are idempotent (`already_exists` if the trimmed value already matches case-insensitively). `checkRef` also powers the duplicate-REF guard before the "Produkt hinzufügen" form opens, and now returns the full row (Hersteller/Kategorie/Hauptlieferant/Lagerort/Bestellstatus/etc.) for the "Produkteigenschaften überprüfen" edit form. `updateProduct` overwrites an existing row by id (used by that edit form's "Speichern") |
 | `src/logger.js` | Ring-buffer log, max. 300 entries, `localStorage`. Debug overlay via `?debug` URL param |
@@ -76,7 +79,7 @@ Standalone mode (no ?id=):
 ### OCR configuration
 
 Gemini 3.1 Flash-Lite (via Apps Script webhook `handleGeminiOcr`; Produktvorschlag `handleLookupProduct` nutzt Gemini 2.5 Flash (aktiv bis Google-Abschaltung 16.10.2026, liefert zuverlässig groundingMetadata) mit Google-Search-Grounding, Ausweich-Kette: 2.5 Flash → 3.1 Pro → 3.5 Flash → 3.1 Flash-Lite ohne Websuche):
-- Canvas frame → downscaled 50 % on offscreen canvas → JPEG (quality 0.7) → base64 → POST `{ action: 'ocr', image, secret }`
+- Canvas frame → JPEG (quality 0.85) → base64 → POST `{ action: 'ocr', image, secret }`. Downscaled only if the long edge exceeds 1568 px. With a Full-HD stream the OCR input is ~1192×688 px (was ~424×256 px with 720p + 50 % downscale)
 - Prompt is hardcoded in `Code.gs` (`handleGeminiOcr`), not sent from the client
 - `GEMINI_API_KEY` must be set in Apps Script Script Properties
 - `WEBHOOK_SECRET` must be set in Apps Script Script Properties (same value as `VITE_WEBHOOK_SECRET`)
@@ -156,7 +159,7 @@ The first `[INFO] canvas:` entry confirms the crop is active:
 ```
 [INFO] canvas: Scan-Zone: 808×472px → OCR-Input: 848×512px (Farbe, 20px pad, angezeigt: 1008×756px, Vollbild: 1280×720px)
 ```
-If scan zone equals full frame, the crop is not working (likely a cache issue).
+If scan zone equals full frame, the crop is not working (likely a cache issue). With a Full-HD stream the values are roughly `Scan-Zone: 1152×648px → OCR-Input: 1192×688px … Vollbild: 1920×1080px`; if `Vollbild` still shows 1280×720 the camera does not offer 1080p.
 
 After a deployment users may still see the old version due to Workbox caching – use an incognito tab or Chrome → Site settings → Clear storage. `registerType: 'autoUpdate'` is active so the app self-updates on next launch.
 
